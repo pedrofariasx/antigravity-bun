@@ -152,10 +152,51 @@ export class AccountsService implements OnModuleInit {
     }
   }
 
+  addAccount(credential: AccountCredential): {
+    id: string;
+    accountNumber: number;
+    isNew: boolean;
+  } {
+    const existingIndex = this.accountStates.findIndex(
+      (s) => s.credential.email === credential.email,
+    );
+
+    if (existingIndex !== -1) {
+      const existing = this.accountStates[existingIndex];
+      existing.credential.accessToken = credential.accessToken;
+      existing.credential.refreshToken = credential.refreshToken;
+      existing.credential.expiryDate = credential.expiryDate;
+      existing.status = 'ready';
+      existing.errorCount = 0;
+      this.logger.log(
+        `Updated existing account ${existing.id}: ${credential.email}`,
+      );
+      return {
+        id: existing.id,
+        accountNumber: existingIndex + 1,
+        isNew: false,
+      };
+    }
+
+    const accountNumber = this.accountStates.length + 1;
+    const id = `account-${accountNumber}`;
+    const newState: AccountState = {
+      id,
+      credential,
+      status: 'ready',
+      requestCount: 0,
+      errorCount: 0,
+    };
+
+    this.accountStates.push(newState);
+    this.logger.log(`Added new account ${id}: ${credential.email}`);
+    return { id, accountNumber, isNew: true };
+  }
+
   getStatus(): AccountStatusResponse {
     const accounts: AccountPublicInfo[] = this.accountStates.map((state) => ({
       id: state.id,
-      email: state.credential.email,
+      email: this.maskEmail(state.credential.email),
       status: state.status,
       cooldownUntil: state.cooldownUntil,
       lastUsed: state.lastUsed,
@@ -175,6 +216,23 @@ export class AccountsService implements OnModuleInit {
       currentIndex: this.currentIndex,
       accounts,
     };
+  }
+
+  private maskEmail(email: string): string {
+    const [local, domain] = email.split('@');
+    if (!domain) return '***';
+    const maskedLocal =
+      local.length <= 2
+        ? '*'.repeat(local.length)
+        : local[0] + '*'.repeat(local.length - 2) + local[local.length - 1];
+    const [domainName, tld] = domain.split('.');
+    const maskedDomain =
+      domainName.length <= 2
+        ? '*'.repeat(domainName.length)
+        : domainName[0] +
+          '*'.repeat(domainName.length - 2) +
+          domainName[domainName.length - 1];
+    return `${maskedLocal}@${maskedDomain}.${tld}`;
   }
 
   getEarliestCooldownEnd(): number | null {

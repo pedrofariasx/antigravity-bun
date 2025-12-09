@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { OAuthService } from './oauth.service';
+import { AccountsService } from '../accounts';
 
 describe('OAuthService', () => {
   let service: OAuthService;
@@ -12,6 +13,15 @@ describe('OAuthService', () => {
     }),
   };
 
+  const mockAccountsService = {
+    addAccount: jest.fn(() => ({
+      id: 'account-1',
+      accountNumber: 1,
+      isNew: true,
+    })),
+    getAccountCount: jest.fn(() => 1),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -19,6 +29,10 @@ describe('OAuthService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: AccountsService,
+          useValue: mockAccountsService,
         },
       ],
     }).compile();
@@ -31,20 +45,25 @@ describe('OAuthService', () => {
   });
 
   describe('getRedirectUri', () => {
-    it('should return localhost URL with port', () => {
-      const redirectUri = service.getRedirectUri();
+    it('should return URL based on protocol and host', () => {
+      const redirectUri = service.getRedirectUri('http', 'localhost:3000');
       expect(redirectUri).toBe('http://localhost:3000/oauth/callback');
+    });
+
+    it('should work with different host and port', () => {
+      const redirectUri = service.getRedirectUri('http', '127.0.0.1:8080');
+      expect(redirectUri).toBe('http://127.0.0.1:8080/oauth/callback');
     });
   });
 
   describe('getAuthorizationUrl', () => {
     it('should return Google OAuth URL', () => {
-      const authUrl = service.getAuthorizationUrl();
+      const authUrl = service.getAuthorizationUrl('http', 'localhost:3000');
       expect(authUrl).toContain('https://accounts.google.com/o/oauth2/v2/auth');
     });
 
     it('should include required OAuth parameters', () => {
-      const authUrl = service.getAuthorizationUrl();
+      const authUrl = service.getAuthorizationUrl('http', 'localhost:3000');
       const url = new URL(authUrl);
       const params = url.searchParams;
 

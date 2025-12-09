@@ -2,11 +2,12 @@ import {
   Controller,
   Get,
   Query,
+  Req,
   Res,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { OAuthService } from './oauth.service';
 
 @Controller('oauth')
@@ -14,8 +15,10 @@ export class OAuthController {
   constructor(private readonly oauthService: OAuthService) {}
 
   @Get('authorize')
-  authorize(@Res() res: Response) {
-    const authUrl = this.oauthService.getAuthorizationUrl();
+  authorize(@Req() req: Request, @Res() res: Response) {
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol || 'http';
+    const authUrl = this.oauthService.getAuthorizationUrl(protocol, host);
     res.redirect(authUrl);
   }
 
@@ -23,6 +26,7 @@ export class OAuthController {
   async callback(
     @Query('code') code: string,
     @Query('error') error: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     if (error) {
@@ -46,11 +50,18 @@ export class OAuthController {
       );
     }
 
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol || 'http';
+
     try {
-      const result = await this.oauthService.exchangeCodeForTokens(code);
+      const result = await this.oauthService.exchangeCodeForTokens(
+        code,
+        protocol,
+        host,
+      );
 
       const accountJson = JSON.stringify({
-        email: result.email || 'unknown',
+        email: result.email,
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
         expiryDate: result.expiryDate,
@@ -60,6 +71,10 @@ export class OAuthController {
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;');
+
+      const actionText = result.isNewAccount
+        ? `Added as new account #${result.accountNumber}`
+        : `Updated existing account #${result.accountNumber}`;
 
       res.status(200).send(`
         <html>
@@ -74,32 +89,55 @@ export class OAuthController {
             .copy-btn:hover { background: #2563eb; }
             .email { color: #9ca3af; }
             .note { background: #1e3a5f; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #3b82f6; }
+            .success-box { background: #14532d; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #22c55e; }
             .warning { background: #3d2f0d; border-left-color: #eab308; }
             code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; }
             .success-icon { font-size: 48px; }
+            .stats { display: flex; gap: 20px; margin-top: 15px; }
+            .stat { background: #1e1e1e; padding: 15px 25px; border-radius: 8px; text-align: center; }
+            .stat-value { font-size: 24px; font-weight: bold; color: #22c55e; }
+            .stat-label { color: #9ca3af; font-size: 12px; margin-top: 5px; }
           </style>
         </head>
         <body>
           <div class="success-icon">✅</div>
           <h1>Authentication Successful!</h1>
-          ${result.email ? `<p class="email">Logged in as: <strong>${result.email}</strong></p>` : ''}
+          <p class="email">Logged in as: <strong>${result.email}</strong></p>
           
-          <h2>Add to .env file</h2>
-          <pre id="env-content">ANTIGRAVITY_ACCOUNTS_1='${escapedJson}'</pre>
+          <div class="success-box">
+            <strong>${actionText}</strong><br>
+            Account is now active and ready to use. No restart required!
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-value">${result.totalAccounts}</div>
+              <div class="stat-label">Total Accounts</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">#${result.accountNumber}</div>
+              <div class="stat-label">This Account</div>
+            </div>
+          </div>
+
+          <h2>Want to persist after restart?</h2>
+          <p>Copy this to your <code>.env</code> file:</p>
+          <pre id="env-content">ANTIGRAVITY_ACCOUNTS_${result.accountNumber}='${escapedJson}'</pre>
           <button class="copy-btn" onclick="copyToClipboard('env-content', this)">Copy to Clipboard</button>
           
           <div class="note">
             <strong>Adding more accounts?</strong><br>
-            Use incrementing numbers: <code>ANTIGRAVITY_ACCOUNTS_2</code>, <code>ANTIGRAVITY_ACCOUNTS_3</code>, etc.<br>
-            The system will automatically rotate between all accounts to avoid rate limits.
+            Just visit <a href="/oauth/authorize" style="color: #3b82f6;">/oauth/authorize</a> again to add another account.<br>
+            The system will automatically assign the next available number.
           </div>
 
           <div class="note warning">
-            <strong>Important:</strong> After adding to <code>.env</code>, restart the server with <code>npm run start:dev</code>
+            <strong>Note:</strong> Accounts added via OAuth are stored in memory only.<br>
+            Add to <code>.env</code> if you want them to persist after server restart.
           </div>
 
           <h2>Check Account Status</h2>
-          <p>After restarting, visit <a href="/accounts/status" style="color: #3b82f6;">/accounts/status</a> to see all configured accounts.</p>
+          <p>Visit <a href="/accounts/status" style="color: #3b82f6;">/accounts/status</a> to see all configured accounts.</p>
 
           <script>
             function copyToClipboard(elementId, button) {
@@ -134,10 +172,12 @@ export class OAuthController {
   }
 
   @Get('status')
-  getStatus() {
+  getStatus(@Req() req: Request) {
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol || 'http';
     return {
-      authUrl: this.oauthService.getAuthorizationUrl(),
-      callbackUrl: this.oauthService.getRedirectUri(),
+      authUrl: this.oauthService.getAuthorizationUrl(protocol, host),
+      callbackUrl: this.oauthService.getRedirectUri(protocol, host),
       instructions: 'Visit /oauth/authorize to start authentication',
     };
   }

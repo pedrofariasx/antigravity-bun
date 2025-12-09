@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosResponse } from 'axios';
+import { AccountsService } from '../accounts';
 
 interface TokenResponse {
   access_token: string;
@@ -17,6 +18,10 @@ export interface OAuthResult {
   refreshToken: string;
   expiryDate: number;
   email?: string;
+  accountId: string;
+  accountNumber: number;
+  isNewAccount: boolean;
+  totalAccounts: number;
 }
 
 @Injectable()
@@ -36,20 +41,19 @@ export class OAuthService {
     'https://www.googleapis.com/auth/experimentsandconfigs',
   ];
 
-  private serverPort: number;
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly accountsService: AccountsService,
+  ) {}
 
-  constructor(private readonly configService: ConfigService) {
-    this.serverPort = this.configService.get<number>('port') || 3000;
+  getRedirectUri(protocol: string, host: string): string {
+    return `${protocol}://${host}/oauth/callback`;
   }
 
-  getRedirectUri(): string {
-    return `http://localhost:${this.serverPort}/oauth/callback`;
-  }
-
-  getAuthorizationUrl(): string {
+  getAuthorizationUrl(protocol: string, host: string): string {
     const params = new URLSearchParams({
       client_id: this.CLIENT_ID,
-      redirect_uri: this.getRedirectUri(),
+      redirect_uri: this.getRedirectUri(protocol, host),
       scope: this.SCOPES.join(' '),
       access_type: 'offline',
       response_type: 'code',
@@ -59,7 +63,11 @@ export class OAuthService {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  async exchangeCodeForTokens(code: string): Promise<OAuthResult> {
+  async exchangeCodeForTokens(
+    code: string,
+    protocol: string,
+    host: string,
+  ): Promise<OAuthResult> {
     this.logger.log('Exchanging authorization code for tokens...');
 
     const response: AxiosResponse<TokenResponse> = await axios.post(
@@ -68,7 +76,7 @@ export class OAuthService {
         code,
         client_id: this.CLIENT_ID,
         client_secret: this.CLIENT_SECRET,
-        redirect_uri: this.getRedirectUri(),
+        redirect_uri: this.getRedirectUri(protocol, host),
         grant_type: 'authorization_code',
       }),
       {
@@ -79,8 +87,7 @@ export class OAuthService {
     const { access_token, refresh_token, expires_in } = response.data;
     const expiryDate = Date.now() + expires_in * 1000;
 
-    // Get user email
-    let email: string | undefined;
+    let email = 'unknown';
     try {
       const userInfo: AxiosResponse<UserInfoResponse> = await axios.get(
         this.USER_INFO_URI,
@@ -88,17 +95,28 @@ export class OAuthService {
           headers: { Authorization: `Bearer ${access_token}` },
         },
       );
-      email = userInfo.data.email;
+      email = userInfo.data.email || 'unknown';
       this.logger.log(`Authenticated as: ${email}`);
     } catch {
       this.logger.warn('Could not fetch user email');
     }
+
+    const { id, accountNumber, isNew } = this.accountsService.addAccount({
+      email,
+      accessToken: access_token,
+      refreshToken: refresh_token,
+      expiryDate,
+    });
 
     return {
       accessToken: access_token,
       refreshToken: refresh_token,
       expiryDate,
       email,
+      accountId: id,
+      accountNumber,
+      isNewAccount: isNew,
+      totalAccounts: this.accountsService.getAccountCount(),
     };
   }
 }
