@@ -49,32 +49,99 @@ export class OAuthController {
     try {
       const result = await this.oauthService.exchangeCodeForTokens(code);
 
+      const accountJson = JSON.stringify({
+        email: result.email,
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken,
+        expiryDate: result.expiryDate,
+      });
+
+      const escapedJson = accountJson
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+
+      const actionText = result.isNewAccount
+        ? `Added as new account #${result.accountNumber}`
+        : `Updated existing account #${result.accountNumber}`;
+
       res.status(200).send(`
         <html>
         <head>
           <title>OAuth Success</title>
           <style>
-            body { font-family: system-ui, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+            body { font-family: system-ui, sans-serif; max-width: 900px; margin: 50px auto; padding: 20px; background: #0f0f0f; color: #e0e0e0; }
             h1 { color: #22c55e; }
-            pre { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; overflow-x: auto; }
+            h2 { color: #3b82f6; margin-top: 30px; }
+            pre { background: #1e1e1e; color: #d4d4d4; padding: 20px; border-radius: 8px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
             .copy-btn { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin-top: 10px; }
             .copy-btn:hover { background: #2563eb; }
-            .email { color: #6b7280; }
+            .email { color: #9ca3af; }
+            .note { background: #1e3a5f; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #3b82f6; }
+            .success-box { background: #14532d; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #22c55e; }
+            .warning { background: #3d2f0d; border-left-color: #eab308; }
+            code { background: #2d2d2d; padding: 2px 6px; border-radius: 4px; }
+            .success-icon { font-size: 48px; }
+            .stats { display: flex; gap: 20px; margin-top: 15px; }
+            .stat { background: #1e1e1e; padding: 15px 25px; border-radius: 8px; text-align: center; }
+            .stat-value { font-size: 24px; font-weight: bold; color: #22c55e; }
+            .stat-label { color: #9ca3af; font-size: 12px; margin-top: 5px; }
           </style>
         </head>
         <body>
+          <div class="success-icon">✅</div>
           <h1>Authentication Successful!</h1>
-          ${result.email ? `<p class="email">Logged in as: ${result.email}</p>` : ''}
-          <p>Add these to your <code>.env</code> file:</p>
-          <pre id="env-content">ANTIGRAVITY_ACCESS_TOKEN=${result.accessToken}
-ANTIGRAVITY_REFRESH_TOKEN=${result.refreshToken}
-ANTIGRAVITY_EXPIRY_DATE=${result.expiryDate}${result.email ? `\nANTIGRAVITY_EMAIL=${result.email}` : ''}</pre>
-          <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('env-content').textContent).then(() => this.textContent = 'Copied!')">
-            Copy to Clipboard
-          </button>
-          <p style="margin-top: 30px; color: #6b7280;">
-            After adding to .env, restart the server with <code>npm run start:dev</code>
-          </p>
+          <p class="email">Logged in as: <strong>${result.email}</strong></p>
+          
+          <div class="success-box">
+            <strong>${actionText}</strong><br>
+            Account is now active and ready to use. No restart required!
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <div class="stat-value">${result.totalAccounts}</div>
+              <div class="stat-label">Total Accounts</div>
+            </div>
+            <div class="stat">
+              <div class="stat-value">#${result.accountNumber}</div>
+              <div class="stat-label">This Account</div>
+            </div>
+          </div>
+
+          <h2>Want to persist after restart?</h2>
+          <p>Copy this to your <code>.env</code> file:</p>
+          <pre id="env-content">ANTIGRAVITY_ACCOUNTS_${result.accountNumber}='${escapedJson}'</pre>
+          <button class="copy-btn" onclick="copyToClipboard('env-content', this)">Copy to Clipboard</button>
+          
+          <div class="note">
+            <strong>Adding more accounts?</strong><br>
+            Just visit <a href="/oauth/authorize" style="color: #3b82f6;">/oauth/authorize</a> again to add another account.<br>
+            The system will automatically assign the next available number.
+          </div>
+
+          <div class="note warning">
+            <strong>Note:</strong> Accounts added via OAuth are stored in memory only.<br>
+            Add to <code>.env</code> if you want them to persist after server restart.
+          </div>
+
+          <h2>Check Account Status</h2>
+          <p>Visit <a href="/accounts/status" style="color: #3b82f6;">/accounts/status</a> to see all configured accounts.</p>
+
+          <script>
+            function copyToClipboard(elementId, button) {
+              const text = document.getElementById(elementId).textContent;
+              navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.style.background = '#22c55e';
+                setTimeout(() => {
+                  button.textContent = originalText;
+                  button.style.background = '#3b82f6';
+                }, 2000);
+              });
+            }
+          </script>
         </body>
         </html>
       `);

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { OAuthService } from './oauth.service';
+import { AccountsService } from '../accounts';
 
 describe('OAuthService', () => {
   let service: OAuthService;
@@ -12,6 +13,15 @@ describe('OAuthService', () => {
     }),
   };
 
+  const mockAccountsService = {
+    addAccount: jest.fn(() => ({
+      id: 'account-1',
+      accountNumber: 1,
+      isNew: true,
+    })),
+    getAccountCount: jest.fn(() => 1),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -19,6 +29,10 @@ describe('OAuthService', () => {
         {
           provide: ConfigService,
           useValue: mockConfigService,
+        },
+        {
+          provide: AccountsService,
+          useValue: mockAccountsService,
         },
       ],
     }).compile();
@@ -31,7 +45,7 @@ describe('OAuthService', () => {
   });
 
   describe('getRedirectUri', () => {
-    it('should return localhost URL with port', () => {
+    it('should return localhost:3000 callback URL', () => {
       const redirectUri = service.getRedirectUri();
       expect(redirectUri).toBe('http://localhost:3000/oauth/callback');
     });
