@@ -220,9 +220,9 @@ export class AnthropicTransformerService {
 
     if (dto.temperature !== undefined) config.temperature = dto.temperature;
     if (dto.top_p !== undefined) config.topP = dto.top_p;
-    if (dto.top_k !== undefined) config.topK = dto.top_k;
+    if (dto.top_k) config.topK = dto.top_k;
     if (dto.max_tokens) config.maxOutputTokens = dto.max_tokens;
-    if (dto.stop_sequences) config.stopSequences = dto.stop_sequences;
+    if (dto.stop_sequences?.length) config.stopSequences = dto.stop_sequences;
 
     if (dto.thinking?.type === 'enabled') {
       config.thinkingConfig = {
