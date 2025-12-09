@@ -1,0 +1,854 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OpenAI API Response Formats Documentation",
+  "version": "1.0.0",
+  "description": "Comprehensive documentation of OpenAI API response formats including successful responses, streaming, and errors",
+
+  "chatCompletion": {
+    "description": "Non-streaming chat completion response structure",
+    "endpoint": "POST /v1/chat/completions",
+    "response": {
+      "id": {
+        "type": "string",
+        "description": "Unique identifier for the chat completion",
+        "example": "chatcmpl-7QyqpwdfhqwajicIEznoc6Q47XAyW"
+      },
+      "object": {
+        "type": "string",
+        "description": "Object type, always 'chat.completion' for non-streaming",
+        "enum": ["chat.completion"],
+        "example": "chat.completion"
+      },
+      "created": {
+        "type": "integer",
+        "description": "Unix timestamp of when the completion was created",
+        "example": 1677664795
+      },
+      "model": {
+        "type": "string",
+        "description": "The model used for the completion",
+        "example": "gpt-4o-2024-05-13"
+      },
+      "system_fingerprint": {
+        "type": "string",
+        "description": "Fingerprint representing the backend configuration",
+        "example": "fp_44709d6fcb",
+        "nullable": true
+      },
+      "choices": {
+        "type": "array",
+        "description": "Array of completion choices",
+        "items": {
+          "$ref": "#/definitions/choice"
+        }
+      },
+      "usage": {
+        "$ref": "#/definitions/usage"
+      }
+    },
+    "example": {
+      "id": "chatcmpl-abc123",
+      "object": "chat.completion",
+      "created": 1677858242,
+      "model": "gpt-4o",
+      "system_fingerprint": "fp_44709d6fcb",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "Hello! How can I assist you today?"
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 13,
+        "completion_tokens": 15,
+        "total_tokens": 28,
+        "completion_tokens_details": {
+          "reasoning_tokens": 0,
+          "accepted_prediction_tokens": 0,
+          "rejected_prediction_tokens": 0,
+          "audio_tokens": 0
+        },
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "audio_tokens": 0
+        }
+      }
+    }
+  },
+
+  "streamingResponse": {
+    "description": "Server-Sent Events (SSE) streaming response format",
+    "endpoint": "POST /v1/chat/completions (with stream: true)",
+    "contentType": "text/event-stream",
+    "format": {
+      "description": "Each chunk is prefixed with 'data: ' followed by JSON, ending with 'data: [DONE]'",
+      "chunkStructure": {
+        "id": {
+          "type": "string",
+          "description": "Same ID across all chunks in a stream"
+        },
+        "object": {
+          "type": "string",
+          "enum": ["chat.completion.chunk"],
+          "description": "Always 'chat.completion.chunk' for streaming"
+        },
+        "created": {
+          "type": "integer",
+          "description": "Unix timestamp"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier"
+        },
+        "system_fingerprint": {
+          "type": "string",
+          "nullable": true
+        },
+        "choices": {
+          "type": "array",
+          "items": {
+            "index": {
+              "type": "integer"
+            },
+            "delta": {
+              "type": "object",
+              "description": "Incremental content - contains 'role' in first chunk, 'content' in subsequent chunks",
+              "properties": {
+                "role": {
+                  "type": "string",
+                  "description": "Only in first chunk"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "Incremental text content"
+                },
+                "tool_calls": {
+                  "type": "array",
+                  "description": "Incremental tool call data"
+                },
+                "function_call": {
+                  "type": "object",
+                  "description": "Deprecated - use tool_calls"
+                }
+              }
+            },
+            "finish_reason": {
+              "type": "string",
+              "nullable": true,
+              "description": "null until final chunk, then contains finish reason"
+            },
+            "logprobs": {
+              "type": "object",
+              "nullable": true
+            }
+          }
+        },
+        "usage": {
+          "type": "object",
+          "description": "Only included in final chunk when stream_options.include_usage is true",
+          "nullable": true
+        }
+      }
+    },
+    "streamSequenceExample": [
+      {
+        "description": "First chunk - contains role",
+        "data": {
+          "id": "chatcmpl-123",
+          "object": "chat.completion.chunk",
+          "created": 1694268190,
+          "model": "gpt-4o",
+          "system_fingerprint": "fp_44709d6fcb",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "role": "assistant",
+                "content": ""
+              },
+              "logprobs": null,
+              "finish_reason": null
+            }
+          ]
+        }
+      },
+      {
+        "description": "Content chunks - incremental text",
+        "data": {
+          "id": "chatcmpl-123",
+          "object": "chat.completion.chunk",
+          "created": 1694268190,
+          "model": "gpt-4o",
+          "system_fingerprint": "fp_44709d6fcb",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": "Hello"
+              },
+              "logprobs": null,
+              "finish_reason": null
+            }
+          ]
+        }
+      },
+      {
+        "description": "Final chunk - contains finish_reason",
+        "data": {
+          "id": "chatcmpl-123",
+          "object": "chat.completion.chunk",
+          "created": 1694268190,
+          "model": "gpt-4o",
+          "system_fingerprint": "fp_44709d6fcb",
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "logprobs": null,
+              "finish_reason": "stop"
+            }
+          ]
+        }
+      },
+      {
+        "description": "Usage chunk (when stream_options.include_usage: true)",
+        "data": {
+          "id": "chatcmpl-123",
+          "object": "chat.completion.chunk",
+          "created": 1694268190,
+          "model": "gpt-4o",
+          "system_fingerprint": "fp_44709d6fcb",
+          "choices": [],
+          "usage": {
+            "prompt_tokens": 13,
+            "completion_tokens": 15,
+            "total_tokens": 28
+          }
+        }
+      },
+      {
+        "description": "Stream termination signal",
+        "raw": "data: [DONE]"
+      }
+    ]
+  },
+
+  "definitions": {
+    "choice": {
+      "type": "object",
+      "description": "A completion choice returned by the model",
+      "properties": {
+        "index": {
+          "type": "integer",
+          "description": "Index of the choice in the array"
+        },
+        "message": {
+          "$ref": "#/definitions/message"
+        },
+        "finish_reason": {
+          "$ref": "#/definitions/finishReason"
+        },
+        "logprobs": {
+          "type": "object",
+          "nullable": true,
+          "description": "Log probability information for the choice",
+          "properties": {
+            "content": {
+              "type": "array",
+              "items": {
+                "token": {
+                  "type": "string"
+                },
+                "logprob": {
+                  "type": "number"
+                },
+                "bytes": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "top_logprobs": {
+                  "type": "array"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "message": {
+      "type": "object",
+      "description": "The assistant's response message",
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": ["assistant"],
+          "description": "Role is always 'assistant' in responses"
+        },
+        "content": {
+          "type": "string",
+          "nullable": true,
+          "description": "Text content of the response, null if tool_calls present"
+        },
+        "tool_calls": {
+          "type": "array",
+          "description": "Tool calls generated by the model",
+          "items": {
+            "id": {
+              "type": "string",
+              "description": "Unique identifier for the tool call"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["function"]
+            },
+            "function": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "arguments": {
+                  "type": "string",
+                  "description": "JSON string of function arguments"
+                }
+              }
+            }
+          }
+        },
+        "function_call": {
+          "type": "object",
+          "deprecated": true,
+          "description": "Deprecated - use tool_calls instead"
+        },
+        "refusal": {
+          "type": "string",
+          "nullable": true,
+          "description": "Refusal message if model refuses request"
+        }
+      }
+    },
+
+    "finishReason": {
+      "type": "string",
+      "description": "Reason why the model stopped generating",
+      "enum": [
+        "stop",
+        "length",
+        "tool_calls",
+        "content_filter",
+        "function_call"
+      ],
+      "enumDescriptions": {
+        "stop": "Natural stop - model completed its response or hit a stop sequence",
+        "length": "Maximum token limit reached (max_tokens or max_completion_tokens)",
+        "tool_calls": "Model decided to call one or more tools",
+        "content_filter": "Content was filtered due to policy violations (Azure OpenAI specific)",
+        "function_call": "Deprecated - model called a function (use tool_calls instead)"
+      }
+    },
+
+    "usage": {
+      "type": "object",
+      "description": "Token usage statistics for the request",
+      "properties": {
+        "prompt_tokens": {
+          "type": "integer",
+          "description": "Number of tokens in the prompt/input"
+        },
+        "completion_tokens": {
+          "type": "integer",
+          "description": "Number of tokens in the completion/output"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "description": "Total tokens (prompt_tokens + completion_tokens)"
+        },
+        "completion_tokens_details": {
+          "type": "object",
+          "description": "Breakdown of completion tokens",
+          "properties": {
+            "reasoning_tokens": {
+              "type": "integer",
+              "description": "Tokens used for reasoning (o1 models)"
+            },
+            "accepted_prediction_tokens": {
+              "type": "integer",
+              "description": "Accepted predicted tokens"
+            },
+            "rejected_prediction_tokens": {
+              "type": "integer",
+              "description": "Rejected predicted tokens"
+            },
+            "audio_tokens": {
+              "type": "integer",
+              "description": "Tokens for audio output"
+            }
+          }
+        },
+        "prompt_tokens_details": {
+          "type": "object",
+          "description": "Breakdown of prompt tokens",
+          "properties": {
+            "cached_tokens": {
+              "type": "integer",
+              "description": "Tokens retrieved from cache"
+            },
+            "audio_tokens": {
+              "type": "integer",
+              "description": "Tokens from audio input"
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "errorResponses": {
+    "description": "Error response formats returned by the OpenAI API",
+    "structure": {
+      "error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Human-readable error message"
+          },
+          "type": {
+            "type": "string",
+            "description": "Error type category"
+          },
+          "param": {
+            "type": "string",
+            "nullable": true,
+            "description": "Parameter that caused the error"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Error code identifier"
+          }
+        }
+      }
+    },
+
+    "httpStatusCodes": {
+      "400": {
+        "name": "Bad Request",
+        "description": "Invalid request parameters or malformed request body",
+        "commonCauses": [
+          "Invalid JSON in request body",
+          "Missing required parameters",
+          "Invalid parameter values",
+          "Context length exceeded"
+        ]
+      },
+      "401": {
+        "name": "Unauthorized",
+        "description": "Authentication failed",
+        "commonCauses": [
+          "Invalid API key",
+          "Expired API key",
+          "Missing Authorization header"
+        ]
+      },
+      "403": {
+        "name": "Forbidden",
+        "description": "Permission denied for the requested resource",
+        "commonCauses": [
+          "API key lacks required permissions",
+          "Account suspended",
+          "Region/country restrictions"
+        ]
+      },
+      "404": {
+        "name": "Not Found",
+        "description": "Requested resource does not exist",
+        "commonCauses": [
+          "Invalid model name",
+          "Invalid endpoint",
+          "Resource deleted"
+        ]
+      },
+      "422": {
+        "name": "Unprocessable Entity",
+        "description": "Request was well-formed but contained semantic errors",
+        "commonCauses": [
+          "Invalid parameter combinations",
+          "Unsupported features for model"
+        ]
+      },
+      "429": {
+        "name": "Too Many Requests",
+        "description": "Rate limit exceeded",
+        "commonCauses": [
+          "Requests per minute limit exceeded",
+          "Tokens per minute limit exceeded",
+          "Concurrent request limit exceeded"
+        ],
+        "headers": {
+          "Retry-After": "Seconds to wait before retrying",
+          "x-ratelimit-limit-requests": "Request limit for the time period",
+          "x-ratelimit-limit-tokens": "Token limit for the time period",
+          "x-ratelimit-remaining-requests": "Remaining requests in time period",
+          "x-ratelimit-remaining-tokens": "Remaining tokens in time period",
+          "x-ratelimit-reset-requests": "Time until request limit resets",
+          "x-ratelimit-reset-tokens": "Time until token limit resets"
+        }
+      },
+      "500": {
+        "name": "Internal Server Error",
+        "description": "Server-side error",
+        "commonCauses": ["Temporary server issues", "Model overloaded"],
+        "recommendation": "Retry with exponential backoff"
+      },
+      "502": {
+        "name": "Bad Gateway",
+        "description": "Server received invalid response from upstream",
+        "recommendation": "Retry after short delay"
+      },
+      "503": {
+        "name": "Service Unavailable",
+        "description": "Server temporarily unavailable",
+        "commonCauses": ["Server overloaded", "Maintenance in progress"],
+        "recommendation": "Retry with exponential backoff"
+      },
+      "504": {
+        "name": "Gateway Timeout",
+        "description": "Request timed out",
+        "recommendation": "Retry with shorter prompt or increased timeout"
+      }
+    },
+
+    "errorCodes": {
+      "invalid_api_key": {
+        "httpStatus": 401,
+        "type": "invalid_request_error",
+        "description": "The API key provided is invalid or malformed",
+        "example": {
+          "error": {
+            "message": "Incorrect API key provided: sk-xxxx****xxxx. You can find your API key at https://platform.openai.com/account/api-keys.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "invalid_api_key"
+          }
+        },
+        "resolution": "Verify your API key is correct and properly formatted"
+      },
+      "rate_limit_exceeded": {
+        "httpStatus": 429,
+        "type": "rate_limit_error",
+        "description": "Too many requests or tokens in a given time period",
+        "example": {
+          "error": {
+            "message": "Rate limit reached for gpt-4 in organization org-xxx on requests per min. Limit: 60/min. Please try again in 1s.",
+            "type": "rate_limit_error",
+            "param": null,
+            "code": "rate_limit_exceeded"
+          }
+        },
+        "resolution": "Implement exponential backoff, reduce request frequency, or upgrade plan"
+      },
+      "model_not_found": {
+        "httpStatus": 404,
+        "type": "invalid_request_error",
+        "description": "The requested model does not exist or you don't have access",
+        "example": {
+          "error": {
+            "message": "The model 'gpt-5' does not exist or you do not have access to it.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "model_not_found"
+          }
+        },
+        "resolution": "Use a valid model name from the models list endpoint"
+      },
+      "context_length_exceeded": {
+        "httpStatus": 400,
+        "type": "invalid_request_error",
+        "description": "Input tokens exceed the model's maximum context length",
+        "example": {
+          "error": {
+            "message": "This model's maximum context length is 8192 tokens. However, your messages resulted in 10234 tokens. Please reduce the length of the messages.",
+            "type": "invalid_request_error",
+            "param": "messages",
+            "code": "context_length_exceeded"
+          }
+        },
+        "resolution": "Reduce prompt length or use a model with larger context window"
+      },
+      "invalid_request_error": {
+        "httpStatus": 400,
+        "type": "invalid_request_error",
+        "description": "Generic invalid request - check the message for specifics",
+        "example": {
+          "error": {
+            "message": "You must provide a model parameter",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": null
+          }
+        },
+        "resolution": "Review request parameters against API documentation"
+      },
+      "insufficient_quota": {
+        "httpStatus": 429,
+        "type": "insufficient_quota",
+        "description": "Account has exceeded its quota or has no remaining credits",
+        "example": {
+          "error": {
+            "message": "You exceeded your current quota, please check your plan and billing details.",
+            "type": "insufficient_quota",
+            "param": null,
+            "code": "insufficient_quota"
+          }
+        },
+        "resolution": "Add credits to your account or upgrade your plan"
+      },
+      "server_error": {
+        "httpStatus": 500,
+        "type": "server_error",
+        "description": "Internal server error on OpenAI's side",
+        "example": {
+          "error": {
+            "message": "The server had an error while processing your request. Sorry about that!",
+            "type": "server_error",
+            "param": null,
+            "code": null
+          }
+        },
+        "resolution": "Retry with exponential backoff"
+      },
+      "engine_overloaded": {
+        "httpStatus": 503,
+        "type": "server_error",
+        "description": "The model is currently overloaded with requests",
+        "example": {
+          "error": {
+            "message": "The engine is currently overloaded. Please try again later.",
+            "type": "server_error",
+            "param": null,
+            "code": "engine_overloaded"
+          }
+        },
+        "resolution": "Retry with exponential backoff"
+      },
+      "timeout": {
+        "httpStatus": 504,
+        "type": "timeout_error",
+        "description": "Request took too long to process",
+        "resolution": "Reduce prompt complexity or use streaming"
+      },
+      "content_policy_violation": {
+        "httpStatus": 400,
+        "type": "invalid_request_error",
+        "description": "Content violates OpenAI's usage policies",
+        "example": {
+          "error": {
+            "message": "Your request was rejected as a result of our safety system.",
+            "type": "invalid_request_error",
+            "param": null,
+            "code": "content_policy_violation"
+          }
+        },
+        "resolution": "Modify content to comply with usage policies"
+      },
+      "billing_hard_limit_reached": {
+        "httpStatus": 429,
+        "type": "billing_error",
+        "description": "Monthly billing limit has been reached",
+        "resolution": "Increase billing limit in account settings or wait for reset"
+      }
+    },
+
+    "errorTypeCategories": {
+      "invalid_request_error": "Client error - request is malformed or invalid",
+      "authentication_error": "API key or authentication issue",
+      "permission_error": "Access denied to requested resource",
+      "rate_limit_error": "Too many requests",
+      "insufficient_quota": "Account quota exceeded",
+      "server_error": "OpenAI server-side issue",
+      "timeout_error": "Request timeout",
+      "billing_error": "Billing or payment issue"
+    }
+  },
+
+  "streamingErrorHandling": {
+    "description": "Errors that can occur during streaming",
+    "midStreamError": {
+      "description": "Error that occurs after streaming has started",
+      "format": {
+        "id": "chatcmpl-xxx",
+        "object": "chat.completion.chunk",
+        "created": 1234567890,
+        "model": "gpt-4o",
+        "choices": [
+          {
+            "index": 0,
+            "delta": {
+              "content": ""
+            },
+            "finish_reason": "error"
+          }
+        ]
+      }
+    },
+    "sseErrorEvent": {
+      "description": "Error transmitted as SSE event",
+      "format": "data: {\"error\":{\"message\":\"...\",\"type\":\"...\",\"code\":\"...\"}}"
+    }
+  },
+
+  "azureSpecificFields": {
+    "description": "Additional fields in Azure OpenAI responses",
+    "prompt_filter_results": {
+      "type": "array",
+      "description": "Content filtering results for the prompt",
+      "items": {
+        "prompt_index": "integer",
+        "content_filter_results": {
+          "hate": {
+            "filtered": "boolean",
+            "severity": "string"
+          },
+          "self_harm": {
+            "filtered": "boolean",
+            "severity": "string"
+          },
+          "sexual": {
+            "filtered": "boolean",
+            "severity": "string"
+          },
+          "violence": {
+            "filtered": "boolean",
+            "severity": "string"
+          }
+        }
+      }
+    },
+    "content_filter_results": {
+      "description": "Content filtering applied to the response (in each choice)"
+    }
+  },
+
+  "responseHeaders": {
+    "description": "Important HTTP headers in responses",
+    "headers": {
+      "x-request-id": "Unique request identifier for debugging",
+      "openai-organization": "Organization ID associated with the request",
+      "openai-processing-ms": "Time spent processing the request",
+      "openai-version": "API version used",
+      "x-ratelimit-limit-requests": "Request rate limit",
+      "x-ratelimit-limit-tokens": "Token rate limit",
+      "x-ratelimit-remaining-requests": "Remaining requests in window",
+      "x-ratelimit-remaining-tokens": "Remaining tokens in window",
+      "x-ratelimit-reset-requests": "When request limit resets",
+      "x-ratelimit-reset-tokens": "When token limit resets"
+    }
+  },
+
+  "toolCallResponse": {
+    "description": "Response format when model calls tools/functions",
+    "example": {
+      "id": "chatcmpl-abc123",
+      "object": "chat.completion",
+      "created": 1699896916,
+      "model": "gpt-4o",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "call_abc123",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"location\":\"San Francisco, CA\",\"unit\":\"celsius\"}"
+                }
+              }
+            ]
+          },
+          "logprobs": null,
+          "finish_reason": "tool_calls"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 82,
+        "completion_tokens": 17,
+        "total_tokens": 99
+      }
+    }
+  },
+
+  "parallelToolCalls": {
+    "description": "Multiple tool calls in a single response",
+    "example": {
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": null,
+            "tool_calls": [
+              {
+                "id": "call_abc123",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"location\":\"San Francisco\"}"
+                }
+              },
+              {
+                "id": "call_def456",
+                "type": "function",
+                "function": {
+                  "name": "get_weather",
+                  "arguments": "{\"location\":\"New York\"}"
+                }
+              }
+            ]
+          },
+          "finish_reason": "tool_calls"
+        }
+      ]
+    }
+  },
+
+  "structuredOutputResponse": {
+    "description": "Response with JSON schema structured output",
+    "note": "When using response_format with json_schema, the content is guaranteed to match the schema",
+    "example": {
+      "id": "chatcmpl-abc123",
+      "object": "chat.completion",
+      "created": 1699896916,
+      "model": "gpt-4o",
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": "{\"name\":\"John\",\"age\":30,\"city\":\"New York\"}",
+            "refusal": null
+          },
+          "logprobs": null,
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 82,
+        "completion_tokens": 17,
+        "total_tokens": 99
+      }
+    }
+  }
+}
