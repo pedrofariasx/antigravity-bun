@@ -354,6 +354,7 @@ export class TransformerService {
         role: 'assistant',
         content: content || null,
       },
+      logprobs: null,
       finish_reason: this.mapFinishReason(candidate?.finishReason),
     };
 
@@ -371,6 +372,7 @@ export class TransformerService {
       object: 'chat.completion',
       created: Math.floor(Date.now() / 1000),
       model,
+      system_fingerprint: null,
       choices: [choice],
       usage: response.response.usageMetadata
         ? {
@@ -466,10 +468,12 @@ export class TransformerService {
           object: 'chat.completion.chunk',
           created: Math.floor(Date.now() / 1000),
           model,
+          system_fingerprint: null,
           choices: [
             {
               index: 0,
               delta: {},
+              logprobs: null,
               finish_reason: finalFinishReason,
             },
           ],
@@ -540,10 +544,12 @@ export class TransformerService {
         object: 'chat.completion.chunk',
         created: Math.floor(Date.now() / 1000),
         model,
+        system_fingerprint: null,
         choices: [
           {
             index: 0,
             delta,
+            logprobs: null,
             finish_reason: finalFinishReason,
           },
         ],
@@ -560,10 +566,12 @@ export class TransformerService {
       object: 'chat.completion.chunk',
       created: Math.floor(Date.now() / 1000),
       model,
+      system_fingerprint: null,
       choices: [
         {
           index: 0,
           delta,
+          logprobs: null,
           finish_reason: null,
         },
       ],
@@ -583,10 +591,12 @@ export class TransformerService {
       object: 'chat.completion.chunk',
       created: Math.floor(Date.now() / 1000),
       model,
+      system_fingerprint: null,
       choices: [
         {
           index: 0,
           delta: {},
+          logprobs: null,
           finish_reason: finalFinishReason,
         },
       ],
