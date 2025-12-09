@@ -3,12 +3,14 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './antigravity/services/auth.service';
+import { OpenAIExceptionFilter } from './common/filters/openai-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
   const app = await NestFactory.create(AppModule);
 
-  // Enable validation
+  app.useGlobalFilters(new OpenAIExceptionFilter());
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,

@@ -267,13 +267,15 @@ export class AntigravityService {
   ): HttpException {
     const status = error.response?.status ?? HttpStatus.INTERNAL_SERVER_ERROR;
     const message = error.response?.data?.error?.message ?? error.message;
+    const errorCode = this.mapHttpStatusToErrorCode(status);
 
     return new HttpException(
       {
         error: {
           message,
           type: this.mapErrorType(status),
-          code: status,
+          param: null,
+          code: errorCode,
         },
       },
       status,
@@ -289,11 +291,37 @@ export class AntigravityService {
       case 403:
         return 'permission_error';
       case 404:
-        return 'not_found_error';
+        return 'invalid_request_error';
       case 429:
         return 'rate_limit_error';
+      case 500:
+      case 502:
+      case 503:
+      case 504:
+        return 'server_error';
       default:
-        return 'api_error';
+        return 'server_error';
+    }
+  }
+
+  private mapHttpStatusToErrorCode(status: number): string | null {
+    switch (status) {
+      case 400:
+        return 'invalid_request_error';
+      case 401:
+        return 'invalid_api_key';
+      case 404:
+        return 'model_not_found';
+      case 429:
+        return 'rate_limit_exceeded';
+      case 500:
+        return 'server_error';
+      case 503:
+        return 'engine_overloaded';
+      case 504:
+        return 'timeout';
+      default:
+        return null;
     }
   }
 
@@ -343,16 +371,19 @@ export class AntigravityService {
 
     this.logger.error(`Streaming error (${status}): ${message}`);
 
+    const errorResponse = {
+      error: {
+        message,
+        type: this.mapErrorType(status),
+        param: null,
+        code: this.mapHttpStatusToErrorCode(status),
+      },
+    };
+
     if (!res.headersSent) {
-      res.status(status).json({
-        error: {
-          message,
-          type: this.mapErrorType(status),
-          code: status,
-        },
-      });
+      res.status(status).json(errorResponse);
     } else if (!res.writableEnded) {
-      res.write(`data: ${JSON.stringify({ error: { message } })}\n\n`);
+      res.write(`data: ${JSON.stringify(errorResponse)}\n\n`);
       res.end();
     }
   }
