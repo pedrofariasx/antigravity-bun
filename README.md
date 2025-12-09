@@ -20,6 +20,8 @@ npm run start:dev
 - `claude-sonnet-4-5-thinking`
 - `claude-opus-4-5`
 
+_as of 9-12-2025_
+
 ## License
 
 MIT
