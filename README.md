@@ -1,4 +1,4 @@
-# Antigravity API
+# Antigravity
 
 > **Warning**: This project uses Google's internal API. Use at your own risk.
 
