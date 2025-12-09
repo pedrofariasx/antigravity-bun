@@ -2,12 +2,11 @@ import {
   Controller,
   Get,
   Query,
-  Req,
   Res,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { OAuthService } from './oauth.service';
 
 @Controller('oauth')
@@ -15,10 +14,8 @@ export class OAuthController {
   constructor(private readonly oauthService: OAuthService) {}
 
   @Get('authorize')
-  authorize(@Req() req: Request, @Res() res: Response) {
-    const host = req.get('host') || 'localhost:3000';
-    const protocol = req.protocol || 'http';
-    const authUrl = this.oauthService.getAuthorizationUrl(protocol, host);
+  authorize(@Res() res: Response) {
+    const authUrl = this.oauthService.getAuthorizationUrl();
     res.redirect(authUrl);
   }
 
@@ -26,7 +23,6 @@ export class OAuthController {
   async callback(
     @Query('code') code: string,
     @Query('error') error: string,
-    @Req() req: Request,
     @Res() res: Response,
   ) {
     if (error) {
@@ -50,15 +46,8 @@ export class OAuthController {
       );
     }
 
-    const host = req.get('host') || 'localhost:3000';
-    const protocol = req.protocol || 'http';
-
     try {
-      const result = await this.oauthService.exchangeCodeForTokens(
-        code,
-        protocol,
-        host,
-      );
+      const result = await this.oauthService.exchangeCodeForTokens(code);
 
       const accountJson = JSON.stringify({
         email: result.email,
@@ -172,12 +161,10 @@ export class OAuthController {
   }
 
   @Get('status')
-  getStatus(@Req() req: Request) {
-    const host = req.get('host') || 'localhost:3000';
-    const protocol = req.protocol || 'http';
+  getStatus() {
     return {
-      authUrl: this.oauthService.getAuthorizationUrl(protocol, host),
-      callbackUrl: this.oauthService.getRedirectUri(protocol, host),
+      authUrl: this.oauthService.getAuthorizationUrl(),
+      callbackUrl: this.oauthService.getRedirectUri(),
       instructions: 'Visit /oauth/authorize to start authentication',
     };
   }

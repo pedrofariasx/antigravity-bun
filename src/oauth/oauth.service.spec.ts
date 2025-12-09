@@ -45,25 +45,20 @@ describe('OAuthService', () => {
   });
 
   describe('getRedirectUri', () => {
-    it('should return URL based on protocol and host', () => {
-      const redirectUri = service.getRedirectUri('http', 'localhost:3000');
+    it('should return localhost:3000 callback URL', () => {
+      const redirectUri = service.getRedirectUri();
       expect(redirectUri).toBe('http://localhost:3000/oauth/callback');
-    });
-
-    it('should work with different host and port', () => {
-      const redirectUri = service.getRedirectUri('http', '127.0.0.1:8080');
-      expect(redirectUri).toBe('http://127.0.0.1:8080/oauth/callback');
     });
   });
 
   describe('getAuthorizationUrl', () => {
     it('should return Google OAuth URL', () => {
-      const authUrl = service.getAuthorizationUrl('http', 'localhost:3000');
+      const authUrl = service.getAuthorizationUrl();
       expect(authUrl).toContain('https://accounts.google.com/o/oauth2/v2/auth');
     });
 
     it('should include required OAuth parameters', () => {
-      const authUrl = service.getAuthorizationUrl('http', 'localhost:3000');
+      const authUrl = service.getAuthorizationUrl();
       const url = new URL(authUrl);
       const params = url.searchParams;
 

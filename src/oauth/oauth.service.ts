@@ -40,20 +40,21 @@ export class OAuthService {
     'https://www.googleapis.com/auth/cclog',
     'https://www.googleapis.com/auth/experimentsandconfigs',
   ];
+  private readonly REDIRECT_URI = 'http://localhost:3000/oauth/callback';
 
   constructor(
     private readonly configService: ConfigService,
     private readonly accountsService: AccountsService,
   ) {}
 
-  getRedirectUri(protocol: string, host: string): string {
-    return `${protocol}://${host}/oauth/callback`;
+  getRedirectUri(): string {
+    return this.REDIRECT_URI;
   }
 
-  getAuthorizationUrl(protocol: string, host: string): string {
+  getAuthorizationUrl(): string {
     const params = new URLSearchParams({
       client_id: this.CLIENT_ID,
-      redirect_uri: this.getRedirectUri(protocol, host),
+      redirect_uri: this.REDIRECT_URI,
       scope: this.SCOPES.join(' '),
       access_type: 'offline',
       response_type: 'code',
@@ -63,11 +64,7 @@ export class OAuthService {
     return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
   }
 
-  async exchangeCodeForTokens(
-    code: string,
-    protocol: string,
-    host: string,
-  ): Promise<OAuthResult> {
+  async exchangeCodeForTokens(code: string): Promise<OAuthResult> {
     this.logger.log('Exchanging authorization code for tokens...');
 
     const response: AxiosResponse<TokenResponse> = await axios.post(
@@ -76,7 +73,7 @@ export class OAuthService {
         code,
         client_id: this.CLIENT_ID,
         client_secret: this.CLIENT_SECRET,
-        redirect_uri: this.getRedirectUri(protocol, host),
+        redirect_uri: this.REDIRECT_URI,
         grant_type: 'authorization_code',
       }),
       {

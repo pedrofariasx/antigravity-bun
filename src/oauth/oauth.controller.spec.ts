@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { OAuthController } from './oauth.controller';
 import { OAuthService } from './oauth.service';
 
@@ -23,11 +23,6 @@ describe('OAuthController', () => {
     send: jest.fn(),
   } as unknown as Response;
 
-  const mockRequest = {
-    get: jest.fn().mockReturnValue('localhost:3000'),
-    protocol: 'http',
-  } as unknown as Request;
-
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OAuthController],
@@ -49,12 +44,9 @@ describe('OAuthController', () => {
 
   describe('authorize', () => {
     it('should redirect to auth URL', () => {
-      controller.authorize(mockRequest, mockResponse);
+      controller.authorize(mockResponse);
 
-      expect(mockOAuthService.getAuthorizationUrl).toHaveBeenCalledWith(
-        'http',
-        'localhost:3000',
-      );
+      expect(mockOAuthService.getAuthorizationUrl).toHaveBeenCalled();
       expect(mockRedirect).toHaveBeenCalledWith(
         'https://accounts.google.com/o/oauth2/auth',
       );
@@ -63,21 +55,15 @@ describe('OAuthController', () => {
 
   describe('getStatus', () => {
     it('should return object with authUrl and callbackUrl', () => {
-      const result = controller.getStatus(mockRequest);
+      const result = controller.getStatus();
 
       expect(result).toEqual({
         authUrl: 'https://accounts.google.com/o/oauth2/auth',
         callbackUrl: 'http://localhost:3000/oauth/callback',
         instructions: 'Visit /oauth/authorize to start authentication',
       });
-      expect(mockOAuthService.getAuthorizationUrl).toHaveBeenCalledWith(
-        'http',
-        'localhost:3000',
-      );
-      expect(mockOAuthService.getRedirectUri).toHaveBeenCalledWith(
-        'http',
-        'localhost:3000',
-      );
+      expect(mockOAuthService.getAuthorizationUrl).toHaveBeenCalled();
+      expect(mockOAuthService.getRedirectUri).toHaveBeenCalled();
     });
   });
 });
