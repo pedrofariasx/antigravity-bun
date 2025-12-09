@@ -16,9 +16,11 @@ describe('AppService', () => {
     expect(appService).toBeDefined();
   });
 
-  describe('getHello', () => {
-    it('should return "Hello World!"', () => {
-      expect(appService.getHello()).toBe('Hello World!');
+  describe('getHealth', () => {
+    it('should return health check response', () => {
+      const result = appService.getHealth();
+      expect(result.status).toBe('ok');
+      expect(result.timestamp).toBeDefined();
     });
   });
 });
