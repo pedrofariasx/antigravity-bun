@@ -14,17 +14,16 @@ export class ApiKeyGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const isAnthropicEndpoint = request.path === '/v1/messages';
-
-    const token = isAnthropicEndpoint
-      ? this.extractAnthropicKey(request)
-      : this.extractOpenAIKey(request);
-
     const apiKey = this.configService.get<string>('proxyApiKey');
 
     if (!apiKey) {
       return true;
     }
+
+    const isAnthropicEndpoint = request.path === '/v1/messages';
+    const token = isAnthropicEndpoint
+      ? this.extractAnthropicKey(request)
+      : this.extractOpenAIKey(request);
 
     if (token !== apiKey) {
       const maskedKey =
