@@ -282,16 +282,29 @@ export class AccountsService implements OnModuleInit {
   }
 
   getStatus(): AccountStatusResponse {
-    const accounts: AccountPublicInfo[] = this.accountsList.map((state) => ({
-      id: state.id,
-      email: state.credential.email,
-      status: state.status,
-      cooldownUntil: state.cooldownUntil,
-      lastUsed: state.lastUsed,
-      requestCount: state.requestCount,
-      errorCount: state.errorCount,
-      consecutiveErrors: state.consecutiveErrors,
-    }));
+    const accounts: AccountPublicInfo[] = this.accountsList.map(
+      (state, index) => {
+        const accountJson = JSON.stringify({
+          email: state.credential.email,
+          accessToken: state.credential.accessToken,
+          refreshToken: state.credential.refreshToken,
+          expiryDate: state.credential.expiryDate,
+        });
+        const envText = `ANTIGRAVITY_ACCOUNTS_${index + 1}='${accountJson}'`;
+
+        return {
+          id: state.id,
+          email: state.credential.email,
+          status: state.status,
+          cooldownUntil: state.cooldownUntil,
+          lastUsed: state.lastUsed,
+          requestCount: state.requestCount,
+          errorCount: state.errorCount,
+          consecutiveErrors: state.consecutiveErrors,
+          envText,
+        };
+      },
+    );
 
     return {
       totalAccounts: this.accountStatesMap.size,

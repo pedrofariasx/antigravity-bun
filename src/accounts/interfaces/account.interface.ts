@@ -36,4 +36,5 @@ export interface AccountPublicInfo {
   requestCount: number;
   errorCount: number;
   consecutiveErrors: number;
+  envText?: string;
 }
