@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { QuotaService } from '../quota/quota.service';
+import { DatabaseService } from '../database/database.service';
 import {
   AccountCredential,
   AccountState,
@@ -51,6 +52,7 @@ export class AccountsService implements OnModuleInit {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => QuotaService))
     private readonly quotaService: QuotaService,
+    private readonly databaseService: DatabaseService,
   ) {
     this.COOLDOWN_DURATION_MS =
       this.configService.get<number>('accounts.cooldownDurationMs') || 60000;
@@ -65,37 +67,67 @@ export class AccountsService implements OnModuleInit {
   }
 
   private loadAccounts(): void {
-    const accounts =
-      this.configService.get<AccountCredential[]>('accounts.list') || [];
+    // 1. Load all from DB
+    const dbAccounts = this.databaseService.getAccounts() as any[];
 
-    if (accounts.length === 0) {
+    // 2. Initial Migration: If DB is empty, migrate from .env once
+    if (dbAccounts.length === 0) {
+      const envAccounts =
+        this.configService.get<AccountCredential[]>('accounts.list') || [];
+      if (envAccounts.length > 0) {
+        this.logger.log(
+          `Initial setup: Migrating ${envAccounts.length} accounts from .env to SQLite...`,
+        );
+        envAccounts.forEach((acc, index) => {
+          const id = `account-${index + 1}`;
+          this.databaseService.upsertAccount({
+            id,
+            email: acc.email,
+            accessToken: acc.accessToken,
+            refreshToken: acc.refreshToken,
+            expiryDate: acc.expiryDate,
+            projectId: acc.projectId,
+          });
+        });
+        // Reload after migration
+        this.loadAccounts();
+        return;
+      }
+    }
+
+    if (dbAccounts.length === 0) {
       this.logger.warn(
         'No accounts configured. Visit /oauth/authorize to add accounts.',
       );
       return;
     }
 
-    accounts.forEach((credential, index) => {
-      const id = `account-${index + 1}`;
+    dbAccounts.forEach((acc) => {
       const state: AccountState = {
-        id,
-        credential,
-        status: 'ready' as const,
-        requestCount: 0,
-        errorCount: 0,
+        id: acc.id,
+        credential: {
+          email: acc.email,
+          accessToken: acc.access_token,
+          refreshToken: acc.refresh_token,
+          expiryDate: acc.expiry_date,
+          projectId: acc.project_id,
+        },
+        status: acc.status as any,
+        requestCount: acc.request_count || 0,
+        errorCount: acc.error_count || 0,
         consecutiveErrors: 0,
+        lastUsed: acc.last_used_at
+          ? new Date(acc.last_used_at).getTime()
+          : undefined,
       };
-      this.accountStatesMap.set(id, state);
+      this.accountStatesMap.set(acc.id, state);
       this.accountsList.push(state);
-      this.emailToIdMap.set(credential.email, id);
+      this.emailToIdMap.set(acc.email, acc.id);
     });
 
     this.logger.log(
-      `Loaded ${this.accountStatesMap.size} account(s) for rotation`,
+      `Loaded ${this.accountStatesMap.size} account(s) from SQLite`,
     );
-    this.accountsList.forEach((state) => {
-      this.logger.log(`  - ${state.id}: ${state.credential.email}`);
-    });
   }
 
   hasAccounts(): boolean {
@@ -117,6 +149,7 @@ export class AccountsService implements OnModuleInit {
       ) {
         state.status = 'ready';
         state.cooldownUntil = undefined;
+        this.databaseService.updateAccountStatus(state.id, 'ready');
         this.logger.debug(
           `Account ${state.id} cooldown expired, marking as ready`,
         );
@@ -126,6 +159,22 @@ export class AccountsService implements OnModuleInit {
     return this.accountsList.filter((s) => s.status === 'ready');
   }
 
+  deleteAccount(id: string): boolean {
+    const result = this.databaseService.deleteAccount(id);
+    if (result.changes > 0) {
+      this.accountStatesMap.delete(id);
+      const index = this.accountsList.findIndex((s) => s.id === id);
+      if (index !== -1) {
+        const email = this.accountsList[index].credential.email;
+        this.accountsList.splice(index, 1);
+        this.emailToIdMap.delete(email);
+      }
+      this.logger.log(`Deleted account ID: ${id}`);
+      return true;
+    }
+    return false;
+  }
+
   getNextAccount(modelName?: string): AccountState | null {
     const readyAccounts = this.getReadyAccounts();
 
@@ -133,11 +182,9 @@ export class AccountsService implements OnModuleInit {
       return null;
     }
 
-    // scoring system
     const scoredAccounts = readyAccounts.map((state) => {
       let score = 0;
 
-      // prioritize quota if available
       if (modelName) {
         const quotaStatus = this.quotaService.getQuotaStatus([
           { id: state.id, email: state.credential.email },
@@ -147,34 +194,27 @@ export class AccountsService implements OnModuleInit {
         );
 
         if (accountQuota) {
-          // high score for available quota
           score += accountQuota.quota * 1000;
           if (accountQuota.status === 'exhausted') {
-            score -= 5000; // heavy penalty
+            score -= 5000;
           }
         }
       }
 
-      // least used (penalty for high request count)
       score -= state.requestCount * 0.1;
 
-      // recency (prefer older used accounts)
       if (state.lastUsed) {
         const secondsSinceLastUse = (Date.now() - state.lastUsed) / 1000;
-        score += Math.min(secondsSinceLastUse, 3600); // max 1 hour bonus
+        score += Math.min(secondsSinceLastUse, 3600);
       } else {
-        score += 4000; // never used accounts get high priority
+        score += 4000;
       }
 
       return { state, score };
     });
 
-    // sort by score descending
     scoredAccounts.sort((a, b) => b.score - a.score);
-
     const selected = scoredAccounts[0].state;
-
-    // update current index for legacy compatibility if needed
     this.currentIndex = this.accountsList.indexOf(selected);
 
     return selected;
@@ -203,12 +243,13 @@ export class AccountsService implements OnModuleInit {
       const backoffFactor = Math.pow(
         2,
         Math.min(state.consecutiveErrors - 1, 6),
-      ); // max 64x
+      );
       state.cooldownUntil =
         Date.now() + this.COOLDOWN_DURATION_MS * backoffFactor;
       state.errorCount++;
+      this.databaseService.updateAccountStatus(accountId, 'cooldown');
       this.logger.warn(
-        `Account ${accountId} (${state.credential.email}) marked as cooldown (attempt ${state.consecutiveErrors}) until ${new Date(state.cooldownUntil).toISOString()}`,
+        `Account ${accountId} marked as cooldown until ${new Date(state.cooldownUntil).toISOString()}`,
       );
     }
   }
@@ -218,6 +259,7 @@ export class AccountsService implements OnModuleInit {
     if (state) {
       state.status = 'error';
       state.errorCount++;
+      this.databaseService.updateAccountStatus(accountId, 'error');
       this.logger.error(
         `Account ${accountId} (${state.credential.email}) marked as error`,
       );
@@ -229,11 +271,13 @@ export class AccountsService implements OnModuleInit {
     if (state) {
       state.requestCount++;
       state.lastUsed = Date.now();
-      state.consecutiveErrors = 0; // reset on success
+      state.consecutiveErrors = 0;
       if (state.status === 'error' || state.status === 'cooldown') {
         state.status = 'ready';
         state.cooldownUntil = undefined;
       }
+      this.databaseService.updateAccountStatus(accountId, 'ready');
+      this.databaseService.incrementAccountUsage(accountId, false);
     }
   }
 
@@ -251,20 +295,31 @@ export class AccountsService implements OnModuleInit {
       existing.credential.expiryDate = credential.expiryDate;
       existing.status = 'ready';
       existing.errorCount = 0;
-      this.logger.log(
-        `Updated existing account ${existing.id}: ${credential.email}`,
-      );
+
+      this.databaseService.upsertAccount({
+        id: existing.id,
+        email: credential.email,
+        accessToken: credential.accessToken,
+        refreshToken: credential.refreshToken,
+        expiryDate: credential.expiryDate,
+        projectId: existing.credential.projectId,
+      });
+
       const accountNumber =
         this.accountsList.findIndex((s) => s.id === existingId) + 1;
-      return {
-        id: existing.id,
-        accountNumber,
-        isNew: false,
-      };
+      return { id: existing.id, accountNumber, isNew: false };
     }
 
-    const accountNumber = this.accountStatesMap.size + 1;
-    const id = `account-${accountNumber}`;
+    // Encontra o próximo número sequencial disponível
+    const existingNums = this.accountsList
+      .map((s) => {
+        const match = s.id.match(/^account-(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter((n) => n > 0);
+
+    const nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+    const id = `account-${nextNum}`;
     const newState: AccountState = {
       id,
       credential,
@@ -277,21 +332,21 @@ export class AccountsService implements OnModuleInit {
     this.accountStatesMap.set(id, newState);
     this.accountsList.push(newState);
     this.emailToIdMap.set(credential.email, id);
-    this.logger.log(`Added new account ${id}: ${credential.email}`);
-    return { id, accountNumber, isNew: true };
+
+    this.databaseService.upsertAccount({
+      id,
+      email: credential.email,
+      accessToken: credential.accessToken,
+      refreshToken: credential.refreshToken,
+      expiryDate: credential.expiryDate,
+    });
+
+    return { id, accountNumber: this.accountsList.length, isNew: true };
   }
 
   getStatus(): AccountStatusResponse {
     const accounts: AccountPublicInfo[] = this.accountsList.map(
       (state, index) => {
-        const accountJson = JSON.stringify({
-          email: state.credential.email,
-          accessToken: state.credential.accessToken,
-          refreshToken: state.credential.refreshToken,
-          expiryDate: state.credential.expiryDate,
-        });
-        const envText = `ANTIGRAVITY_ACCOUNTS_${index + 1}='${accountJson}'`;
-
         return {
           id: state.id,
           email: state.credential.email,
@@ -301,7 +356,7 @@ export class AccountsService implements OnModuleInit {
           requestCount: state.requestCount,
           errorCount: state.errorCount,
           consecutiveErrors: state.consecutiveErrors,
-          envText,
+          envText: `SQLite Persisted`,
         };
       },
     );
@@ -319,21 +374,10 @@ export class AccountsService implements OnModuleInit {
     };
   }
 
-  private maskEmail(email: string): string {
-    const [local, domain] = email.split('@');
-    if (!domain) return '***';
-    const maskedLocal =
-      local.length <= 2
-        ? '*'.repeat(local.length)
-        : local[0] + '*'.repeat(local.length - 2) + local[local.length - 1];
-    const [domainName, tld] = domain.split('.');
-    const maskedDomain =
-      domainName.length <= 2
-        ? '*'.repeat(domainName.length)
-        : domainName[0] +
-          '*'.repeat(domainName.length - 2) +
-          domainName[domainName.length - 1];
-    return `${maskedLocal}@${maskedDomain}.${tld}`;
+  getAccountForExport(id: string): AccountCredential | null {
+    const state = this.accountStatesMap.get(id);
+    if (!state) return null;
+    return state.credential;
   }
 
   getEarliestCooldownEnd(): number | null {
@@ -341,7 +385,6 @@ export class AccountsService implements OnModuleInit {
       (s) => s.status === 'cooldown' && s.cooldownUntil,
     );
     if (cooldownAccounts.length === 0) return null;
-
     return Math.min(...cooldownAccounts.map((s) => s.cooldownUntil!));
   }
 
@@ -350,6 +393,19 @@ export class AccountsService implements OnModuleInit {
   }
 
   async getAccessToken(state: AccountState): Promise<string> {
+    // Reload from DB to ensure we have the latest token (refreshed by Admin instance)
+    const allDb = this.databaseService.getAccounts() as any[];
+    const dbAcc = allDb.find((a) => a.id === state.id);
+    if (dbAcc) {
+      state.credential.accessToken = dbAcc.access_token;
+      state.credential.refreshToken = dbAcc.refresh_token;
+      state.credential.expiryDate = dbAcc.expiry_date;
+      state.credential.projectId = dbAcc.project_id;
+      state.status = dbAcc.status as any;
+      state.requestCount = dbAcc.request_count || 0;
+      state.errorCount = dbAcc.error_count || 0;
+    }
+
     if (this.isTokenExpired(state)) {
       await this.refreshToken(state);
     }
@@ -357,10 +413,6 @@ export class AccountsService implements OnModuleInit {
   }
 
   async refreshToken(state: AccountState): Promise<void> {
-    this.logger.debug(
-      `Refreshing token for account ${state.id} (${state.credential.email})...`,
-    );
-
     try {
       const response = await axios.post<OAuthTokenResponse>(
         this.TOKEN_URI,
@@ -387,7 +439,16 @@ export class AccountsService implements OnModuleInit {
         state.credential.refreshToken = response.data.refresh_token;
       }
 
-      this.logger.debug(`Successfully refreshed token for account ${state.id}`);
+      this.databaseService.upsertAccount({
+        id: state.id,
+        email: state.credential.email,
+        accessToken: state.credential.accessToken,
+        refreshToken: state.credential.refreshToken,
+        expiryDate: state.credential.expiryDate,
+        projectId: state.credential.projectId,
+      });
+
+      this.logger.debug(`Refreshed token for account ${state.id}`);
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
@@ -411,71 +472,43 @@ export class AccountsService implements OnModuleInit {
     if (state.credential.projectId) {
       return state.credential.projectId;
     }
-
     if (state.discoveredProjectId) {
       return state.discoveredProjectId;
     }
-
     state.discoveredProjectId = await this.discoverProjectId(state);
     return state.discoveredProjectId;
   }
 
   private async discoverProjectId(state: AccountState): Promise<string> {
-    this.logger.debug(`Discovering project ID for account ${state.id}...`);
-
     const token = await this.getAccessToken(state);
     const headers = {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
-
-    const coreClientMetadata = {
-      ideType: 'IDE_UNSPECIFIED',
-      platform: 'PLATFORM_UNSPECIFIED',
-      pluginType: 'GEMINI',
-    };
-
     try {
       const loadResponse = await axios.post<LoadCodeAssistResponse>(
         `${this.CODE_ASSIST_ENDPOINT}:loadCodeAssist`,
-        { cloudaicompanionProject: null, metadata: coreClientMetadata },
+        {
+          cloudaicompanionProject: null,
+          metadata: {
+            ideType: 'IDE_UNSPECIFIED',
+            platform: 'PLATFORM_UNSPECIFIED',
+            pluginType: 'GEMINI',
+          },
+        },
         { headers, timeout: 20000 },
       );
-
-      const data = loadResponse.data;
-      const serverProject = data.cloudaicompanionProject;
-
+      const serverProject = loadResponse.data.cloudaicompanionProject;
       if (serverProject) {
-        this.logger.log(
-          `Discovered project ID for ${state.id}: ${serverProject}`,
-        );
+        this.databaseService.upsertAccount({
+          ...state.credential,
+          id: state.id,
+          projectId: serverProject,
+        });
         return serverProject;
       }
-
-      if (!data.currentTier) {
-        this.logger.log(`Onboarding account ${state.id}...`);
-        const allowedTiers = data.allowedTiers || [];
-        const defaultTier = allowedTiers.find((t) => t.isDefault);
-        const tierId = defaultTier?.id || 'free-tier';
-
-        const projectId = await this.onboardUser(tierId, headers);
-        if (projectId) {
-          this.logger.log(
-            `Onboarded ${state.id} with project ID: ${projectId}`,
-          );
-          return projectId;
-        }
-      }
-
       return this.generateFakeProjectId();
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        this.logger.error(
-          `Project discovery failed for ${state.id}: ${error.response?.status} - ${JSON.stringify(error.response?.data)}`,
-        );
-      } else {
-        this.logger.error(`Project discovery failed for ${state.id}: ${error}`);
-      }
+    } catch {
       return this.generateFakeProjectId();
     }
   }
@@ -484,35 +517,28 @@ export class AccountsService implements OnModuleInit {
     tierId: string,
     headers: Record<string, string>,
   ): Promise<string | null> {
-    const coreClientMetadata = {
-      ideType: 'IDE_UNSPECIFIED',
-      platform: 'PLATFORM_UNSPECIFIED',
-      pluginType: 'GEMINI',
-    };
-
     for (let i = 0; i < 60; i++) {
       const response = await axios.post<OnboardUserResponse>(
         `${this.CODE_ASSIST_ENDPOINT}:onboardUser`,
-        { tierId, cloudaicompanionProject: null, metadata: coreClientMetadata },
+        {
+          tierId,
+          cloudaicompanionProject: null,
+          metadata: {
+            ideType: 'IDE_UNSPECIFIED',
+            platform: 'PLATFORM_UNSPECIFIED',
+            pluginType: 'GEMINI',
+          },
+        },
         { headers, timeout: 30000 },
       );
-
-      if (response.data.done) {
+      if (response.data.done)
         return response.data.response?.cloudaicompanionProject?.id || null;
-      }
-
       await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-
     return null;
   }
 
   private generateFakeProjectId(): string {
-    const adjectives = ['useful', 'bright', 'swift', 'calm', 'bold'];
-    const nouns = ['fuze', 'wave', 'spark', 'flow', 'core'];
-    const randomAdj = adjectives[Math.floor(Math.random() * adjectives.length)];
-    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
-    const randomHex = Math.random().toString(16).substring(2, 7);
-    return `${randomAdj}-${randomNoun}-${randomHex}`;
+    return `antigravity-project-${Math.random().toString(16).substring(2, 7)}`;
   }
 }

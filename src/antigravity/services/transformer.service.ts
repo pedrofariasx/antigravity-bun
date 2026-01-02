@@ -42,6 +42,11 @@ export interface StreamAccumulator {
   hasToolCalls: boolean;
   isComplete: boolean;
   accumulatedFinishReason: string | null;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
 @Injectable()
@@ -428,6 +433,11 @@ export class TransformerService {
       if (hasUsage) {
         accumulator.isComplete = true;
         const finalFinishReason = this.determineFinalFinishReason(accumulator);
+        accumulator.usage = {
+          prompt_tokens: chunk.response.usageMetadata!.promptTokenCount,
+          completion_tokens: chunk.response.usageMetadata!.candidatesTokenCount,
+          total_tokens: chunk.response.usageMetadata!.totalTokenCount,
+        };
 
         return {
           id: requestId,
@@ -504,6 +514,11 @@ export class TransformerService {
     if (hasUsage) {
       accumulator.isComplete = true;
       const finalFinishReason = this.determineFinalFinishReason(accumulator);
+      accumulator.usage = {
+        prompt_tokens: chunk.response.usageMetadata!.promptTokenCount,
+        completion_tokens: chunk.response.usageMetadata!.candidatesTokenCount,
+        total_tokens: chunk.response.usageMetadata!.totalTokenCount,
+      };
 
       return {
         id: requestId,

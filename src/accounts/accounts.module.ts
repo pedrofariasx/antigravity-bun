@@ -2,10 +2,11 @@ import { Module, Global, forwardRef } from '@nestjs/common';
 import { AccountsService } from './accounts.service';
 import { AccountsController } from './accounts.controller';
 import { QuotaModule } from '../quota/quota.module';
+import { DatabaseModule } from '../database/database.module';
 
 @Global()
 @Module({
-  imports: [forwardRef(() => QuotaModule)],
+  imports: [forwardRef(() => QuotaModule), DatabaseModule],
   controllers: [AccountsController],
   providers: [AccountsService],
   exports: [AccountsService],

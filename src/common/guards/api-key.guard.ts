@@ -5,60 +5,78 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Request } from 'express';
+import type { Request } from 'express';
+import { ApiKeysService } from '../../api-keys/api-keys.service';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(private readonly apiKeysService: ApiKeysService) {}
 
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<Request>();
-    const apiKey = this.configService.get<string>('proxyApiKey');
 
-    if (!apiKey) {
+    const isAnthropicEndpoint = request.path === '/v1/messages';
+
+    // If no API keys in DB, allow all requests (open mode)
+    const dbKeysCount = this.apiKeysService.getAllApiKeys().length;
+    if (dbKeysCount === 0) {
       return true;
     }
 
-    const isAnthropicEndpoint = request.path === '/v1/messages';
-    const token = isAnthropicEndpoint
-      ? this.extractAnthropicKey(request)
-      : this.extractOpenAIKey(request);
-
-    if (token !== apiKey) {
-      const maskedKey =
-        token.length > 8 ? `${token.slice(0, 4)}...${token.slice(-4)}` : '****';
-
-      if (isAnthropicEndpoint) {
-        throw new HttpException(
-          {
-            type: 'error',
-            error: {
-              type: 'authentication_error',
-              message: `Invalid API key provided: ${maskedKey}`,
-            },
-          },
-          HttpStatus.UNAUTHORIZED,
-        );
+    let token = '';
+    try {
+      token = isAnthropicEndpoint
+        ? this.extractAnthropicKey(request)
+        : this.extractOpenAIKey(request);
+    } catch (e) {
+      // If we failed to extract but there's no protection, let it pass
+      if (dbKeysCount === 0) {
+        return true;
       }
+      throw e;
+    }
 
+    // Validate against Database API keys
+    const { valid, keyData } = this.apiKeysService.validateApiKey(token);
+    if (valid && keyData) {
+      // Attach key info to request for logging later
+      (request as any).apiKey = keyData;
+      return true;
+    }
+
+    // Auth failed
+    const maskedKey =
+      token && token.length > 8
+        ? `${token.slice(0, 4)}...${token.slice(-4)}`
+        : '****';
+
+    if (isAnthropicEndpoint) {
       throw new HttpException(
         {
+          type: 'error',
           error: {
-            message: `Incorrect API key provided: ${maskedKey}. You can find your API key in your settings.`,
             type: 'authentication_error',
-            param: null,
-            code: 'invalid_api_key',
+            message: `Invalid API key provided: ${maskedKey}`,
           },
         },
         HttpStatus.UNAUTHORIZED,
       );
     }
 
-    return true;
+    throw new HttpException(
+      {
+        error: {
+          message: `Incorrect API key provided: ${maskedKey}. You can create API keys in the dashboard.`,
+          type: 'authentication_error',
+          param: null,
+          code: 'invalid_api_key',
+        },
+      },
+      HttpStatus.UNAUTHORIZED,
+    );
   }
 
-  private extractAnthropicKey(request: Request): string {
+  private extractAnthropicKey(request: any): string {
     const xApiKey = request.headers['x-api-key'];
 
     if (!xApiKey || typeof xApiKey !== 'string') {
@@ -77,7 +95,7 @@ export class ApiKeyGuard implements CanActivate {
     return xApiKey;
   }
 
-  private extractOpenAIKey(request: Request): string {
+  private extractOpenAIKey(request: any): string {
     const authHeader = request.headers.authorization;
 
     if (!authHeader) {

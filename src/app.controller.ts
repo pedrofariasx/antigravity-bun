@@ -1,18 +1,21 @@
-import { Controller, Get, Header } from '@nestjs/common';
+import { Controller, Get, Post, Header, Req, Res } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { AppService } from './app.service';
 import { AccountsService } from './accounts/accounts.service';
 import { AntigravityService } from './antigravity/antigravity.service';
 import { QuotaService } from './quota/quota.service';
+import { AuthService } from './auth/auth.service';
+import { DatabaseService } from './database/database.service';
 
 @Controller()
 export class AppController {
-  private initialRefreshDone = false;
-
   constructor(
     private readonly appService: AppService,
     private readonly accountsService: AccountsService,
     private readonly antigravityService: AntigravityService,
     private readonly quotaService: QuotaService,
+    private readonly authService: AuthService,
+    private readonly databaseService: DatabaseService,
   ) {}
 
   @Get('health')
@@ -20,38 +23,72 @@ export class AppController {
     return this.appService.getHealth();
   }
 
+  @Get('login')
+  @Header('Content-Type', 'text/html')
+  getLoginPage(): string {
+    return this.appService.getLoginPage();
+  }
+
   @Get()
   @Header('Content-Type', 'text/html')
-  async getDashboard(): Promise<string> {
-    const status = this.accountsService.getStatus();
-    const quotaAccounts = this.accountsService.getAccountsForQuotaStatus();
+  getDashboard(@Req() req: Request, @Res() res: Response) {
+    const sessionId = req.cookies?.session;
 
-    // Se for a primeira vez carregando a página, faz o refresh automático
-    if (!this.initialRefreshDone && status.totalAccounts > 0) {
-      this.initialRefreshDone = true;
-      const quotaStatus = await this.antigravityService.getQuotaStatus();
-      return this.appService.getDashboard(status, quotaStatus);
+    if (!this.authService.validateSession(sessionId)) {
+      return res.redirect('/login');
     }
 
-    // Nas vezes seguintes, usa o cache para performance
-    const quotaStatus = this.quotaService.getQuotaStatus(quotaAccounts);
-    return this.appService.getDashboard(status, quotaStatus);
+    return res.send(this.appService.getDashboard());
   }
 
   @Get('api/dashboard')
-  async getDashboardData() {
+  getDashboardData(@Req() req: Request, @Res() res: Response) {
+    const sessionId = req.cookies?.session;
+
+    if (!this.authService.validateSession(sessionId)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     const status = this.accountsService.getStatus();
     const quotaAccounts = this.accountsService.getAccountsForQuotaStatus();
     const quotaStatus = this.quotaService.getQuotaStatus(quotaAccounts);
-    return { status, quotaStatus };
+    return res.json({ status, quotaStatus });
   }
 
   @Get('api/quota/refresh')
-  async refreshQuotaApi() {
+  async refreshQuotaApi(@Req() req: Request, @Res() res: Response) {
+    const sessionId = req.cookies?.session;
+
+    if (!this.authService.validateSession(sessionId)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
     await this.antigravityService.getQuotaStatus();
     const status = this.accountsService.getStatus();
     const quotaAccounts = this.accountsService.getAccountsForQuotaStatus();
     const quotaStatus = this.quotaService.getQuotaStatus(quotaAccounts);
-    return { status, quotaStatus };
+    return res.json({ status, quotaStatus });
+  }
+
+  @Get('api/models')
+  getModelsApi(@Req() req: Request, @Res() res: Response) {
+    const sessionId = req.cookies?.session;
+
+    if (!this.authService.validateSession(sessionId)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const models = this.antigravityService.listModels();
+    return res.json(models);
+  }
+
+  @Post('api/database/reset')
+  resetDatabase(@Req() req: Request, @Res() res: Response) {
+    const sessionId = req.cookies?.session;
+    if (!this.authService.validateSession(sessionId)) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const result = this.databaseService.resetDatabase();
+    return res.json(result);
   }
 }

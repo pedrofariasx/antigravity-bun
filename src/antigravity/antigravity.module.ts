@@ -5,9 +5,10 @@ import { AntigravityService } from './antigravity.service';
 import { AnthropicTransformerService } from './services/anthropic-transformer.service';
 import { TransformerService } from './services/transformer.service';
 import { QuotaModule } from '../quota/quota.module';
+import { ApiKeysModule } from '../api-keys/api-keys.module';
 
 @Module({
-  imports: [ConfigModule, QuotaModule],
+  imports: [ConfigModule, QuotaModule, ApiKeysModule],
   controllers: [AntigravityController],
   providers: [
     AntigravityService,

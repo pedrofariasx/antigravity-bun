@@ -54,6 +54,7 @@ export class AntigravityController {
     res.setHeader('x-request-id', requestId);
 
     const forcedAccountId = res.req.headers['x-antigravity-account'] as string;
+    const apiKeyData = (res.req as any).apiKey;
 
     if (dto.stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -64,6 +65,7 @@ export class AntigravityController {
         dto,
         res,
         forcedAccountId,
+        apiKeyData,
       );
       return;
     }
@@ -71,6 +73,7 @@ export class AntigravityController {
     const result = await this.antigravityService.chatCompletion(
       dto,
       forcedAccountId,
+      apiKeyData,
     );
     res.setHeader('openai-processing-ms', String(Date.now() - startTime));
     return result;
@@ -124,6 +127,7 @@ export class AntigravityController {
     res.setHeader('x-request-id', messageId);
 
     const forcedAccountId = res.req.headers['x-antigravity-account'] as string;
+    const apiKeyData = (res.req as any).apiKey;
 
     if (dto.stream) {
       res.setHeader('Content-Type', 'text/event-stream');
@@ -135,6 +139,7 @@ export class AntigravityController {
         res,
         messageId,
         forcedAccountId,
+        apiKeyData,
       );
       return;
     }
@@ -143,6 +148,7 @@ export class AntigravityController {
       dto,
       messageId,
       forcedAccountId,
+      apiKeyData,
     );
   }
 

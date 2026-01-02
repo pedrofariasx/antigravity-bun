@@ -25,8 +25,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 
-# Expor a porta que a aplicação utiliza
+# Expor as portas para API Proxy e Admin Dashboard
 EXPOSE 3000
+EXPOSE 3001
 
 # Comando para iniciar a aplicação
 CMD ["npm", "run", "start:prod"]

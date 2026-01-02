@@ -6,30 +6,27 @@ interface AccountCredential {
   projectId?: string;
 }
 
+/**
+ * Legacy loader for initial migration.
+ * This will be removed in future versions in favor of SQLite persistence.
+ */
 function loadAccountsFromEnv(): AccountCredential[] {
   const accounts: AccountCredential[] = [];
   let index = 1;
 
-  while (true) {
+  while (index <= 50) {
+    // Safety limit
     const envValue = process.env[`ANTIGRAVITY_ACCOUNTS_${index}`];
-    if (!envValue) break;
-
-    try {
-      const parsed = JSON.parse(envValue) as AccountCredential;
-      if (
-        parsed.email &&
-        parsed.accessToken &&
-        parsed.refreshToken &&
-        parsed.expiryDate
-      ) {
-        accounts.push(parsed);
+    if (envValue) {
+      try {
+        const parsed = JSON.parse(envValue) as AccountCredential;
+        if (parsed.email && parsed.accessToken && parsed.refreshToken) {
+          accounts.push(parsed);
+        }
+      } catch {
+        console.warn(`Failed to parse ANTIGRAVITY_ACCOUNTS_${index}`);
       }
-    } catch {
-      console.warn(
-        `Failed to parse ANTIGRAVITY_ACCOUNTS_${index}, skipping...`,
-      );
     }
-
     index++;
   }
 
@@ -39,7 +36,10 @@ function loadAccountsFromEnv(): AccountCredential[] {
 export default () => ({
   port: parseInt(process.env.PORT ?? '3000', 10),
 
-  proxyApiKey: process.env.PROXY_API_KEY ?? '',
+  auth: {
+    dashboardUsername: process.env.DASHBOARD_USERNAME ?? 'admin',
+    dashboardPassword: process.env.DASHBOARD_PASSWORD ?? 'admin',
+  },
 
   antigravity: {
     clientId:
@@ -60,8 +60,9 @@ export default () => ({
   },
 
   oauth: {
+    redirectUri: process.env.OAUTH_REDIRECT_URI,
     callbackPort: parseInt(process.env.OAUTH_CALLBACK_PORT ?? '51121', 10),
-    callbackPath: process.env.OAUTH_CALLBACK_PATH || '/oauthcallback',
+    callbackPath: process.env.OAUTH_CALLBACK_PATH || '/oauth/callback',
     tokenUri: 'https://oauth2.googleapis.com/token',
     scopes: [
       'https://www.googleapis.com/auth/cloud-platform',

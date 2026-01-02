@@ -27,9 +27,8 @@ export interface OAuthResult {
 @Injectable()
 export class OAuthService {
   private readonly logger = new Logger(OAuthService.name);
-  private readonly CLIENT_ID =
-    '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-  private readonly CLIENT_SECRET = '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';
+  private readonly CLIENT_ID: string;
+  private readonly CLIENT_SECRET: string;
   private readonly TOKEN_URI = 'https://oauth2.googleapis.com/token';
   private readonly USER_INFO_URI =
     'https://www.googleapis.com/oauth2/v1/userinfo';
@@ -40,21 +39,43 @@ export class OAuthService {
     'https://www.googleapis.com/auth/cclog',
     'https://www.googleapis.com/auth/experimentsandconfigs',
   ];
-  private readonly REDIRECT_URI = 'http://localhost:3000/oauth/callback';
+  private getRedirectUriInternal(): string {
+    // 1. Prioridade máxima: URL definida via variável de ambiente (OAUTH_REDIRECT_URI)
+    const envRedirect = this.configService.get<string>('oauth.redirectUri');
+    if (envRedirect) {
+      return envRedirect;
+    }
+
+    // 2. Fallback inteligente: constrói URL baseada na porta principal
+    // Isso resolve o problema de redirecionar para portas erradas (3001 vs 3000)
+    const port = this.configService.get<number>('port') || 3000;
+    const path =
+      this.configService.get<string>('oauth.callbackPath') || '/oauth/callback';
+    return `http://localhost:${port}${path}`;
+  }
 
   constructor(
     private readonly configService: ConfigService,
     private readonly accountsService: AccountsService,
-  ) {}
+  ) {
+    // Permite sobrescrever credenciais via .env
+    this.CLIENT_ID =
+      this.configService.get<string>('antigravity.clientId') ||
+      '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
+    this.CLIENT_SECRET =
+      this.configService.get<string>('antigravity.clientSecret') ||
+      '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';
+  }
 
   getRedirectUri(): string {
-    return this.REDIRECT_URI;
+    return this.getRedirectUriInternal();
   }
 
   getAuthorizationUrl(): string {
+    const redirectUri = this.getRedirectUriInternal();
     const params = new URLSearchParams({
       client_id: this.CLIENT_ID,
-      redirect_uri: this.REDIRECT_URI,
+      redirect_uri: redirectUri,
       scope: this.SCOPES.join(' '),
       access_type: 'offline',
       response_type: 'code',
@@ -73,7 +94,7 @@ export class OAuthService {
         code,
         client_id: this.CLIENT_ID,
         client_secret: this.CLIENT_SECRET,
-        redirect_uri: this.REDIRECT_URI,
+        redirect_uri: this.getRedirectUriInternal(),
         grant_type: 'authorization_code',
       }),
       {

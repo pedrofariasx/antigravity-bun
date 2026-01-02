@@ -42,6 +42,10 @@ export interface AnthropicStreamAccumulator {
   currentToolInputJson: string;
   stopReason: AnthropicStopReason;
   isComplete: boolean;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+  };
 }
 
 @Injectable()
@@ -556,6 +560,10 @@ export class AnthropicTransformerService {
         usage: { output_tokens: accumulator.outputTokens },
       });
       events.push({ type: 'message_stop' });
+      accumulator.usage = {
+        input_tokens: accumulator.inputTokens,
+        output_tokens: accumulator.outputTokens,
+      };
     }
 
     return events;

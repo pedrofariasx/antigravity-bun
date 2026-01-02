@@ -1,4 +1,13 @@
-import { Controller, Get, Res } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Res,
+  Delete,
+  Param,
+  Body,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AccountsService } from './accounts.service';
@@ -16,6 +25,39 @@ export class AccountsController {
   @ApiResponse({ status: 200, description: 'Account status' })
   getStatus() {
     return this.accountsService.getStatus();
+  }
+
+  @Get(':id/export')
+  @ApiOperation({
+    summary: 'Export account credentials',
+    description: 'Returns full account credentials for .env file',
+  })
+  exportAccount(@Param('id') id: string, @Res() res: Response) {
+    const credential = this.accountsService.getAccountForExport(id);
+    if (!credential) {
+      return res
+        .status(HttpStatus.NOT_FOUND)
+        .json({ error: 'Account not found' });
+    }
+    return res.json(credential);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete an account' })
+  deleteAccount(@Param('id') id: string, @Res() res: Response) {
+    const success = this.accountsService.deleteAccount(id);
+    if (!success) {
+      return res
+        .status(HttpStatus.NOT_FOUND)
+        .json({ error: 'Account not found' });
+    }
+    return res.json({ success: true, message: 'Account deleted' });
+  }
+
+  @Post('manual')
+  @ApiOperation({ summary: 'Add account manually' })
+  addManual(@Body() credential: any) {
+    return this.accountsService.addAccount(credential);
   }
 
   @Get('add')

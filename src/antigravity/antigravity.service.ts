@@ -26,6 +26,7 @@ import {
 } from './constants';
 import { SSEStreamParser } from '../common/utils';
 import { QuotaStatusResponse } from '../quota/interfaces';
+import { ApiKeysService } from '../api-keys/api-keys.service';
 
 type ApiType = 'openai' | 'anthropic';
 
@@ -41,6 +42,7 @@ export class AntigravityService {
     private readonly anthropicTransformerService: AnthropicTransformerService,
     private readonly quotaService: QuotaService,
     private readonly configService: ConfigService,
+    private readonly apiKeysService: ApiKeysService,
   ) {
     this.maxRetryAccounts =
       this.configService.get<number>('accounts.maxRetryAccounts') || 3;
@@ -225,50 +227,87 @@ export class AntigravityService {
   async chatCompletion(
     dto: ChatCompletionRequestDto,
     forcedAccountId?: string,
+    apiKeyData?: any,
   ): Promise<ChatCompletionResponse> {
     this.checkAccountsExist();
     const requestId = `chatcmpl-${uuidv4()}`;
+    const startTime = Date.now();
 
-    return this.withAccountRetry(
-      async (accountState) => {
-        const projectId = await this.accountsService.getProjectId(accountState);
-        const antigravityRequest = this.transformerService.transformRequest(
-          dto,
-          projectId,
-        );
+    try {
+      const response = await this.withAccountRetry(
+        async (accountState) => {
+          const projectId =
+            await this.accountsService.getProjectId(accountState);
+          const antigravityRequest = this.transformerService.transformRequest(
+            dto,
+            projectId,
+          );
 
-        this.logger.debug(
-          `Chat completion: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
-        );
+          this.logger.debug(
+            `Chat completion: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
+          );
 
-        const response = await this.makeRequest<AntigravityResponse>(
-          ':generateContent',
-          antigravityRequest,
-          accountState,
-        );
+          const response = await this.makeRequest<AntigravityResponse>(
+            ':generateContent',
+            antigravityRequest,
+            accountState,
+          );
 
-        this.accountsService.markSuccess(accountState.id);
+          this.accountsService.markSuccess(accountState.id);
 
-        return this.transformerService.transformResponse(
-          response,
-          dto.model,
-          requestId,
-        );
-      },
-      'openai',
-      undefined,
-      forcedAccountId,
-      dto.model,
-    );
+          return this.transformerService.transformResponse(
+            response,
+            dto.model,
+            requestId,
+          );
+        },
+        'openai',
+        undefined,
+        forcedAccountId,
+        dto.model,
+      );
+
+      const latency = Date.now() - startTime;
+      const tokens = response.usage?.total_tokens || 0;
+
+      if (apiKeyData) {
+        this.apiKeysService.updateUsage(apiKeyData.id, tokens);
+      }
+
+      this.apiKeysService.logRequest(
+        apiKeyData?.id || null,
+        dto.model,
+        response.usage?.prompt_tokens || 0,
+        response.usage?.completion_tokens || 0,
+        latency,
+        'success',
+      );
+
+      return response;
+    } catch (error) {
+      const latency = Date.now() - startTime;
+      this.apiKeysService.logRequest(
+        apiKeyData?.id || null,
+        dto.model,
+        0,
+        0,
+        latency,
+        'error',
+        error.message,
+      );
+      throw error;
+    }
   }
 
   async chatCompletionStream(
     dto: ChatCompletionRequestDto,
     res: Response,
     forcedAccountId?: string,
+    apiKeyData?: any,
   ): Promise<void> {
     this.checkAccountsExist();
     const requestId = `chatcmpl-${uuidv4()}`;
+    const startTime = Date.now();
 
     await this.withAccountRetry(
       async (accountState) => {
@@ -326,12 +365,40 @@ export class AntigravityService {
           },
           parser,
         });
+
+        const latency = Date.now() - startTime;
+        const promptTokens = accumulator.usage?.prompt_tokens || 0;
+        const completionTokens = accumulator.usage?.completion_tokens || 0;
+        const totalTokens = promptTokens + completionTokens;
+
+        if (apiKeyData) {
+          this.apiKeysService.updateUsage(apiKeyData.id, totalTokens);
+        }
+
+        this.apiKeysService.logRequest(
+          apiKeyData?.id || null,
+          dto.model,
+          promptTokens,
+          completionTokens,
+          latency,
+          'success',
+        );
       },
       'openai',
       res,
       forcedAccountId,
       dto.model,
     ).catch(async (error) => {
+      const latency = Date.now() - startTime;
+      this.apiKeysService.logRequest(
+        apiKeyData?.id || null,
+        dto.model,
+        0,
+        0,
+        latency,
+        'error',
+        error.message,
+      );
       if (!res.headersSent) {
         throw error;
       }
@@ -387,38 +454,75 @@ export class AntigravityService {
     dto: AnthropicMessagesRequestDto,
     messageId: string,
     forcedAccountId?: string,
+    apiKeyData?: any,
   ): Promise<AnthropicMessagesResponse> {
     this.checkAccountsExist();
+    const startTime = Date.now();
 
-    return this.withAccountRetry(
-      async (accountState) => {
-        const projectId = await this.accountsService.getProjectId(accountState);
-        const antigravityRequest =
-          this.anthropicTransformerService.transformRequest(dto, projectId);
+    try {
+      const response = await this.withAccountRetry(
+        async (accountState) => {
+          const projectId =
+            await this.accountsService.getProjectId(accountState);
+          const antigravityRequest =
+            this.anthropicTransformerService.transformRequest(dto, projectId);
 
-        this.logger.debug(
-          `Anthropic messages: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
-        );
+          this.logger.debug(
+            `Anthropic messages: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
+          );
 
-        const response = await this.makeRequest<AntigravityResponse>(
-          ':generateContent',
-          antigravityRequest,
-          accountState,
-        );
+          const response = await this.makeRequest<AntigravityResponse>(
+            ':generateContent',
+            antigravityRequest,
+            accountState,
+          );
 
-        this.accountsService.markSuccess(accountState.id);
+          this.accountsService.markSuccess(accountState.id);
 
-        return this.anthropicTransformerService.transformResponse(
-          response,
-          dto.model,
-          messageId,
-        );
-      },
-      'anthropic',
-      undefined,
-      forcedAccountId,
-      dto.model,
-    );
+          return this.anthropicTransformerService.transformResponse(
+            response,
+            dto.model,
+            messageId,
+          );
+        },
+        'anthropic',
+        undefined,
+        forcedAccountId,
+        dto.model,
+      );
+
+      const latency = Date.now() - startTime;
+      const inputTokens = response.usage?.input_tokens || 0;
+      const output_tokens = response.usage?.output_tokens || 0;
+      const totalTokens = inputTokens + output_tokens;
+
+      if (apiKeyData) {
+        this.apiKeysService.updateUsage(apiKeyData.id, totalTokens);
+      }
+
+      this.apiKeysService.logRequest(
+        apiKeyData?.id || null,
+        dto.model,
+        inputTokens,
+        output_tokens,
+        latency,
+        'success',
+      );
+
+      return response;
+    } catch (error) {
+      const latency = Date.now() - startTime;
+      this.apiKeysService.logRequest(
+        apiKeyData?.id || null,
+        dto.model,
+        0,
+        0,
+        latency,
+        'error',
+        error.message,
+      );
+      throw error;
+    }
   }
 
   async anthropicMessagesStream(
@@ -426,8 +530,10 @@ export class AntigravityService {
     res: Response,
     messageId: string,
     forcedAccountId?: string,
+    apiKeyData?: any,
   ): Promise<void> {
     this.checkAccountsExist();
+    const startTime = Date.now();
 
     await this.withAccountRetry(
       async (accountState) => {
@@ -495,6 +601,24 @@ export class AntigravityService {
           },
           parser,
         });
+
+        const latency = Date.now() - startTime;
+        const inputTokens = accumulator.usage?.input_tokens || 0;
+        const outputTokens = accumulator.usage?.output_tokens || 0;
+        const totalTokens = inputTokens + outputTokens;
+
+        if (apiKeyData) {
+          this.apiKeysService.updateUsage(apiKeyData.id, totalTokens);
+        }
+
+        this.apiKeysService.logRequest(
+          apiKeyData?.id || null,
+          dto.model,
+          inputTokens,
+          outputTokens,
+          latency,
+          'success',
+        );
       },
       'anthropic',
       res,

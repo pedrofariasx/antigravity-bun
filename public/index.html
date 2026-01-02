@@ -1,0 +1,1068 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Antigravity Dashboard</title>
+    <meta
+      name="description"
+      content="AI Gateway Proxy - OpenAI & Anthropic Compatible"
+    />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Favicon -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236366f1' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M13 10V3L4 14h7v7l9-11h-7z'/%3E%3C/svg%3E"
+    />
+
+    <link rel="stylesheet" href="/public/style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <div class="logo-group">
+            <div class="logo-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+            </div>
+            <div class="logo-text">
+              <h1>Antigravity</h1>
+              <div class="tagline">AI Gateway Proxy</div>
+            </div>
+          </div>
+          <nav class="nav-tabs">
+            <button
+              onclick="showView('dashboard')"
+              id="nav-dashboard"
+              class="nav-tab active"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+              </svg>
+              Dashboard
+            </button>
+            <button
+              onclick="showView('models')"
+              id="nav-models"
+              class="nav-tab"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+              Models
+            </button>
+            <button onclick="showView('keys')" id="nav-keys" class="nav-tab">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+              API Keys
+            </button>
+            <button onclick="showView('docs')" id="nav-docs" class="nav-tab">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              API Docs
+            </button>
+          </nav>
+        </div>
+        <div class="header-right">
+          <button
+            onclick="toggleTheme()"
+            class="btn-icon theme-toggle"
+            id="theme-toggle"
+            title="Toggle theme (Alt+T)"
+          >
+            <svg
+              id="icon-dark"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"
+              />
+            </svg>
+            <svg
+              id="icon-light"
+              style="display: none"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+              />
+            </svg>
+          </button>
+          <div class="system-status">
+            <div class="status-dot"></div>
+            <span class="status-text">Operational</span>
+          </div>
+          <button
+            onclick="logout()"
+            class="btn btn-secondary"
+            style="padding: 8px 16px; font-size: 0.8rem"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              style="width: 16px; height: 16px"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+              />
+            </svg>
+            Logout
+          </button>
+        </div>
+      </header>
+
+      <!-- Dashboard View -->
+      <div id="view-dashboard" class="spa-view active">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-header">
+              <div class="stat-icon">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                  />
+                </svg>
+              </div>
+              <span class="stat-label">Total Accounts</span>
+            </div>
+            <div id="stat-total" class="stat-value">0</div>
+            <div class="stat-footer">Configured accounts</div>
+          </div>
+          <div class="stat-card success">
+            <div class="stat-header">
+              <div class="stat-icon success">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <span class="stat-label">Ready</span>
+            </div>
+            <div id="stat-ready" class="stat-value success">0</div>
+            <div class="stat-footer">Available for requests</div>
+          </div>
+          <div class="stat-card warning">
+            <div class="stat-header">
+              <div class="stat-icon warning">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+              </div>
+              <span class="stat-label">Cooldown</span>
+            </div>
+            <div id="stat-cooldown" class="stat-value warning">0</div>
+            <div class="stat-footer">Rate limited</div>
+          </div>
+          <div class="stat-card error">
+            <div class="stat-header">
+              <div class="stat-icon error">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
+                </svg>
+              </div>
+              <span class="stat-label">Errors</span>
+            </div>
+            <div id="stat-errors" class="stat-value error">0</div>
+            <div class="stat-footer">Needs attention</div>
+          </div>
+        </div>
+
+        <!-- Accounts Table -->
+        <div class="section-box">
+          <div class="section-header">
+            <div class="section-title">
+              <h2>Account Rotation</h2>
+              <span id="account-badge" class="badge">0 accounts</span>
+            </div>
+            <div class="section-actions">
+              <button
+                onclick="refreshQuota()"
+                class="btn btn-secondary"
+                id="btn-refresh"
+                title="Refresh quota (Alt+R)"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                Refresh Quota
+              </button>
+              <button
+                onclick="resetDatabase()"
+                class="btn btn-secondary"
+                style="
+                  color: var(--accent-red);
+                  border-color: var(--accent-red);
+                "
+                title="Reset Database"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+                Reset DB
+              </button>
+              <button onclick="openAuthPopup()" class="btn btn-primary">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                Add Account
+              </button>
+              <button
+                onclick="showManualAccountModal()"
+                class="btn btn-secondary"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"
+                  />
+                </svg>
+                Manual Add
+              </button>
+            </div>
+          </div>
+
+          <div id="accounts-container">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Account ID</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Quota Usage</th>
+                    <th class="text-right">Requests</th>
+                    <th class="text-right">Errors</th>
+                    <th>Last Used</th>
+                  </tr>
+                </thead>
+                <tbody id="accounts-tbody">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="empty-state" class="empty-state" style="display: none">
+            <div class="empty-state-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+                />
+              </svg>
+            </div>
+            <h3>No accounts configured</h3>
+            <p>
+              Add your first Google account to start using the proxy. The
+              authentication process is secure and takes less than a minute.
+            </p>
+            <button onclick="openAuthPopup()" class="btn btn-primary">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
+              </svg>
+              Add Your First Account
+            </button>
+          </div>
+        </div>
+
+        <!-- Keyboard Shortcuts Info -->
+        <div
+          style="
+            text-align: center;
+            margin-top: 20px;
+            padding: 16px;
+            background: var(--bg-glass);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+          "
+        >
+          <span style="color: var(--text-dim); font-size: 0.8rem">
+            ⌨️ Keyboard shortcuts:
+            <code style="margin: 0 4px">Alt+R</code> Refresh •
+            <code style="margin: 0 4px">Alt+T</code> Toggle theme •
+            <code style="margin: 0 4px">Alt+1/2/3</code> Navigate
+          </span>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+          <div>
+            Antigravity v1.0.0 — OpenAI & Anthropic Compatible API Proxy
+          </div>
+          <div class="footer-links">
+            <a href="/v1/models">Models API</a>
+            <a href="/health">Health Check</a>
+            <a href="/docs">API Docs</a>
+            <a
+              href="https://github.com/pedrofariasx/antigravity"
+              target="_blank"
+              >GitHub</a
+            >
+          </div>
+        </footer>
+      </div>
+
+      <!-- Models View -->
+      <div id="view-models" class="spa-view">
+        <div class="section-box">
+          <div class="section-header">
+            <div class="section-title">
+              <h2>Available Models</h2>
+              <span id="models-badge" class="badge">0 models</span>
+            </div>
+          </div>
+          <div id="models-grid" class="models-grid">
+            <!-- Loaded via JS -->
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+          <div>
+            Antigravity v1.0.0 — OpenAI & Anthropic Compatible API Proxy
+          </div>
+          <div class="footer-links">
+            <a href="/v1/models">Models API</a>
+            <a href="/health">Health Check</a>
+            <a href="/docs">API Docs</a>
+            <a
+              href="https://github.com/pedrofariasx/antigravity"
+              target="_blank"
+              >GitHub</a
+            >
+          </div>
+        </footer>
+      </div>
+
+      <!-- API Keys View -->
+      <div id="view-keys" class="spa-view">
+        <div class="section-box">
+          <div class="section-header">
+            <div class="section-title">
+              <h2>API Keys</h2>
+              <span id="keys-badge" class="badge">0 keys</span>
+            </div>
+            <div class="section-actions">
+              <button onclick="showCreateKeyModal()" class="btn btn-primary">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  />
+                </svg>
+                Create API Key
+              </button>
+            </div>
+          </div>
+
+          <div id="keys-container">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Key</th>
+                    <th>Status</th>
+                    <th class="text-right">Requests</th>
+                    <th class="text-right">Tokens Used</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="keys-tbody">
+                  <!-- Loaded via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="keys-empty-state" class="empty-state" style="display: none">
+            <div class="empty-state-icon">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+                />
+              </svg>
+            </div>
+            <h3>No API keys created</h3>
+            <p>
+              Create your first API key to allow external applications to access
+              the proxy.
+            </p>
+            <button onclick="showCreateKeyModal()" class="btn btn-primary">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
+              </svg>
+              Create Your First API Key
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+          <div>
+            Antigravity v1.0.0 — OpenAI & Anthropic Compatible API Proxy
+          </div>
+          <div class="footer-links">
+            <a href="/v1/models">Models API</a>
+            <a href="/health">Health Check</a>
+            <a href="/docs">API Docs</a>
+            <a
+              href="https://github.com/pedrofariasx/antigravity"
+              target="_blank"
+              >GitHub</a
+            >
+          </div>
+        </footer>
+      </div>
+
+      <!-- Docs View -->
+      <div id="view-docs" class="spa-view">
+        <div class="docs-container">
+          <!-- Quick Start Section -->
+          <div class="section-box docs-section">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>🚀 Quick Start</h2>
+              </div>
+            </div>
+            <div class="docs-content">
+              <p class="docs-intro">
+                Antigravity é um proxy compatível com as APIs da
+                <strong>OpenAI</strong> e <strong>Anthropic</strong>. Basta
+                apontar seu SDK existente para este servidor e usar normalmente.
+              </p>
+
+              <div class="docs-grid">
+                <div class="docs-card">
+                  <h4>📍 Base URL</h4>
+                  <code class="docs-code-block" id="base-url-display"
+                    >http://localhost:3000/v1</code
+                  >
+                  <button
+                    onclick="
+                      copyToClipboard(
+                        document.getElementById('base-url-display').textContent,
+                      )
+                    "
+                    class="btn btn-secondary btn-sm"
+                  >
+                    Copiar
+                  </button>
+                </div>
+                <div class="docs-card">
+                  <h4>🔑 Autenticação</h4>
+                  <p>Use uma API Key criada no Dashboard:</p>
+                  <code class="docs-code-block"
+                    >Authorization: Bearer sk-ag-xxxxx</code
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Authentication Section -->
+          <div class="section-box docs-section">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>🔐 Autenticação</h2>
+              </div>
+            </div>
+            <div class="docs-content">
+              <div class="docs-info-box">
+                <strong>⚡ Modo Aberto:</strong> Se não houver API Keys criadas,
+                a API aceita qualquer requisição.
+                <br />
+                <strong>🔒 Modo Protegido:</strong> Quando você cria a primeira
+                API Key, apenas requisições autenticadas são aceitas.
+              </div>
+
+              <h4>OpenAI Format</h4>
+              <pre
+                class="docs-pre"
+              ><code>Authorization: Bearer sk-ag-xxxxx</code></pre>
+
+              <h4>Anthropic Format</h4>
+              <pre class="docs-pre"><code>x-api-key: sk-ag-xxxxx
+anthropic-version: 2023-06-01</code></pre>
+            </div>
+          </div>
+
+          <!-- Code Examples Section -->
+          <div class="section-box docs-section">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>💻 Exemplos de Código</h2>
+              </div>
+            </div>
+            <div class="docs-content">
+              <div class="docs-tabs">
+                <button class="docs-tab active" onclick="showCodeTab('python')">
+                  Python
+                </button>
+                <button class="docs-tab" onclick="showCodeTab('nodejs')">
+                  Node.js
+                </button>
+                <button class="docs-tab" onclick="showCodeTab('curl')">
+                  cURL
+                </button>
+              </div>
+
+              <div id="code-python" class="docs-code-panel active">
+                <h4>OpenAI SDK</h4>
+                <pre class="docs-pre"><code>from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-ag-xxxxx",
+    base_url="http://localhost:3000/v1"
+)
+
+response = client.chat.completions.create(
+    model="gemini-2.5-flash",
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+
+print(response.choices[0].message.content)</code></pre>
+
+                <h4>Anthropic SDK</h4>
+                <pre class="docs-pre"><code>import anthropic
+
+client = anthropic.Anthropic(
+    api_key="sk-ag-xxxxx",
+    base_url="http://localhost:3000/v1"
+)
+
+message = client.messages.create(
+    model="claude-sonnet-4-5",
+    max_tokens=1024,
+    messages=[
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+
+print(message.content[0].text)</code></pre>
+              </div>
+
+              <div id="code-nodejs" class="docs-code-panel">
+                <h4>OpenAI SDK</h4>
+                <pre class="docs-pre"><code>import OpenAI from 'openai';
+
+const client = new OpenAI({
+    apiKey: 'sk-ag-xxxxx',
+    baseURL: 'http://localhost:3000/v1'
+});
+
+const response = await client.chat.completions.create({
+    model: 'gemini-2.5-flash',
+    messages: [
+        { role: 'user', content: 'Hello!' }
+    ]
+});
+
+console.log(response.choices[0].message.content);</code></pre>
+
+                <h4>Streaming</h4>
+                <pre
+                  class="docs-pre"
+                ><code>const stream = await client.chat.completions.create({
+    model: 'claude-sonnet-4-5',
+    messages: [{ role: 'user', content: 'Hello!' }],
+    stream: true
+});
+
+for await (const chunk of stream) {
+    process.stdout.write(chunk.choices[0]?.delta?.content || '');
+}</code></pre>
+              </div>
+
+              <div id="code-curl" class="docs-code-panel">
+                <h4>OpenAI Format</h4>
+                <pre
+                  class="docs-pre"
+                ><code>curl http://localhost:3000/v1/chat/completions \
+  -H "Authorization: Bearer sk-ag-xxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-2.5-flash",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+
+                <h4>Anthropic Format</h4>
+                <pre
+                  class="docs-pre"
+                ><code>curl http://localhost:3000/v1/messages \
+  -H "x-api-key: sk-ag-xxxxx" \
+  -H "Content-Type: application/json" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "claude-sonnet-4-5",
+    "max_tokens": 1024,
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+              </div>
+            </div>
+          </div>
+
+          <!-- Endpoints Section -->
+          <div class="section-box docs-section">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>🌐 Endpoints</h2>
+              </div>
+            </div>
+            <div class="docs-content">
+              <div class="docs-table-wrapper">
+                <table class="docs-table">
+                  <thead>
+                    <tr>
+                      <th>Endpoint</th>
+                      <th>Método</th>
+                      <th>Formato</th>
+                      <th>Descrição</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><code>/v1/chat/completions</code></td>
+                      <td><span class="method-badge post">POST</span></td>
+                      <td>OpenAI</td>
+                      <td>Chat completion (suporta streaming)</td>
+                    </tr>
+                    <tr>
+                      <td><code>/v1/messages</code></td>
+                      <td><span class="method-badge post">POST</span></td>
+                      <td>Anthropic</td>
+                      <td>Mensagens Claude (suporta streaming)</td>
+                    </tr>
+                    <tr>
+                      <td><code>/v1/models</code></td>
+                      <td><span class="method-badge get">GET</span></td>
+                      <td>OpenAI</td>
+                      <td>Lista modelos disponíveis</td>
+                    </tr>
+                    <tr>
+                      <td><code>/v1/quota</code></td>
+                      <td><span class="method-badge get">GET</span></td>
+                      <td>-</td>
+                      <td>Status da quota por conta</td>
+                    </tr>
+                    <tr>
+                      <td><code>/health</code></td>
+                      <td><span class="method-badge get">GET</span></td>
+                      <td>-</td>
+                      <td>Health check</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Thinking Mode Section -->
+          <div class="section-box docs-section">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>🧠 Modo de Raciocínio (Thinking)</h2>
+              </div>
+            </div>
+            <div class="docs-content">
+              <p>
+                Ative o modo de raciocínio para respostas mais elaboradas.
+                Adicione <code>reasoning_effort</code> à sua requisição:
+              </p>
+
+              <pre class="docs-pre"><code>{
+  "model": "claude-sonnet-4-5",
+  "messages": [{"role": "user", "content": "Resolva esta equação..."}],
+  "reasoning_effort": "high",
+  "stream": true
+}</code></pre>
+
+              <div class="docs-grid" style="margin-top: 20px">
+                <div class="docs-card">
+                  <h4>Níveis Disponíveis</h4>
+                  <ul class="docs-list">
+                    <li>
+                      <code>low</code> - Raciocínio básico, respostas rápidas
+                    </li>
+                    <li>
+                      <code>medium</code> - Equilíbrio velocidade/profundidade
+                    </li>
+                    <li>
+                      <code>high</code> - Raciocínio profundo, respostas
+                      elaboradas
+                    </li>
+                  </ul>
+                </div>
+                <div class="docs-card">
+                  <h4>Modelos Suportados</h4>
+                  <ul class="docs-list">
+                    <li><code>gemini-3-pro-preview</code> ✅</li>
+                    <li><code>gemini-2.5-flash</code> ✅</li>
+                    <li><code>claude-sonnet-4-5</code> ✅</li>
+                    <li><code>claude-opus-4-5</code> ⚡ (sempre ativo)</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="docs-info-box" style="margin-top: 16px">
+                <strong>💡 Dica:</strong> Modelos Claude só retornam
+                <code>reasoning_content</code> em modo streaming.
+              </div>
+            </div>
+          </div>
+
+          <!-- Swagger Section -->
+          <div class="section-box docs-section">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>📖 API Reference (Swagger)</h2>
+              </div>
+              <div class="section-actions">
+                <a href="/docs" target="_blank" class="btn btn-secondary">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    style="width: 16px; height: 16px"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                    />
+                  </svg>
+                  Abrir em Nova Aba
+                </a>
+              </div>
+            </div>
+            <iframe
+              src="/docs"
+              class="docs-swagger-frame"
+              title="Swagger API Documentation"
+            ></iframe>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+          <div>
+            Antigravity v1.0.0 — OpenAI & Anthropic Compatible API Proxy
+          </div>
+          <div class="footer-links">
+            <a href="/v1/models">Models API</a>
+            <a href="/health">Health Check</a>
+            <a
+              href="https://github.com/pedrofariasx/antigravity"
+              target="_blank"
+              >GitHub</a
+            >
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- Create Key Modal -->
+    <div id="create-key-modal" class="modal" style="display: none">
+      <div class="modal-backdrop" onclick="hideCreateKeyModal()"></div>
+      <div class="modal-content">
+        <h3>Create New API Key</h3>
+        <form id="create-key-form">
+          <div class="form-group">
+            <label for="key-name">Key Name</label>
+            <input
+              type="text"
+              id="key-name"
+              placeholder="e.g., Production App"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="daily-limit">Daily Token Limit (0 = unlimited)</label>
+            <input type="number" id="daily-limit" value="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="rate-limit">Rate Limit (requests/minute)</label>
+            <input type="number" id="rate-limit" value="60" min="1" />
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              onclick="hideCreateKeyModal()"
+              class="btn btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">Create Key</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- New Key Display Modal -->
+    <div id="new-key-modal" class="modal" style="display: none">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <h3>🎉 API Key Created!</h3>
+        <p style="color: var(--accent-yellow); margin-bottom: 16px">
+          ⚠️ Copy this key now - it won't be shown again!
+        </p>
+        <div class="key-display">
+          <code
+            id="new-key-value"
+            style="word-break: break-all; font-size: 0.9rem"
+          ></code>
+          <button
+            onclick="copyNewKey()"
+            class="btn btn-secondary"
+            style="margin-top: 12px"
+          >
+            📋 Copy to Clipboard
+          </button>
+        </div>
+        <div class="modal-actions" style="margin-top: 24px">
+          <button
+            type="button"
+            onclick="hideNewKeyModal()"
+            class="btn btn-primary"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual Account Modal -->
+    <div id="manual-account-modal" class="modal" style="display: none">
+      <div class="modal-backdrop" onclick="hideManualAccountModal()"></div>
+      <div class="modal-content">
+        <h3>Add Account Manually</h3>
+        <form id="manual-account-form">
+          <div class="form-group">
+            <label for="acc-email">Email</label>
+            <input
+              type="email"
+              id="acc-email"
+              placeholder="user@gmail.com"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="acc-access">Access Token</label>
+            <input
+              type="text"
+              id="acc-access"
+              placeholder="ya29.xxx"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="acc-refresh">Refresh Token</label>
+            <input
+              type="text"
+              id="acc-refresh"
+              placeholder="1//0xxx"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="acc-expiry">Expiry Date (timestamp ms)</label>
+            <input
+              type="number"
+              id="acc-expiry"
+              placeholder="1749123456789"
+              required
+            />
+          </div>
+          <div class="modal-actions">
+            <button
+              type="button"
+              onclick="hideManualAccountModal()"
+              class="btn btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">Save Account</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script src="/public/dashboard.js"></script>
+  </body>
+</html>
