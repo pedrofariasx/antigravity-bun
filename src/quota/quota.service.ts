@@ -115,6 +115,12 @@ export class QuotaService {
     if (highQuota) {
       accountCache.set('gemini-3-pro-preview', { ...highQuota });
     }
+
+    // Mirror gemini-3-flash to gemini-3-pro-flash-preview
+    const flashQuota = accountCache.get('gemini-3-flash');
+    if (flashQuota) {
+      accountCache.set('gemini-3-pro-flash-preview', { ...flashQuota });
+    }
   }
 
   getQuotaStatus(

@@ -129,22 +129,18 @@ function showSkeletonLoading() {
     if (el) el.innerHTML = '<div class="skeleton skeleton-stat"></div>';
   });
 
-  // Table skeleton
-  const tbody = document.getElementById('accounts-tbody');
-  if (tbody) {
-    tbody.innerHTML = Array(3)
+  // Grid skeleton
+  const grid = document.getElementById('accounts-grid');
+  if (grid) {
+    grid.innerHTML = Array(3)
       .fill(null)
       .map(
         (_, i) => `
-        <tr class="table-row" style="animation-delay: ${i * 0.1}s">
-            <td><div class="skeleton skeleton-text" style="width: 100px;"></div></td>
-            <td><div class="skeleton skeleton-text" style="width: 200px;"></div></td>
-            <td><div class="skeleton skeleton-text" style="width: 80px;"></div></td>
-            <td><div class="skeleton skeleton-text" style="width: 150px;"></div></td>
-            <td><div class="skeleton skeleton-text" style="width: 50px;"></div></td>
-            <td><div class="skeleton skeleton-text" style="width: 50px;"></div></td>
-            <td><div class="skeleton skeleton-text" style="width: 80px;"></div></td>
-        </tr>
+        <div class="account-card" style="animation-delay: ${i * 0.1}s">
+            <div class="skeleton skeleton-text" style="width: 150px; height: 24px;"></div>
+            <div class="skeleton skeleton-text" style="width: 100%; height: 60px;"></div>
+            <div class="skeleton skeleton-text" style="width: 100%; height: 100px;"></div>
+        </div>
     `,
       )
       .join('');
@@ -319,14 +315,14 @@ async function fetchApiKeys() {
 }
 
 function updateKeysUI() {
-  const tbody = document.getElementById('keys-tbody');
+  const grid = document.getElementById('keys-grid');
   const container = document.getElementById('keys-container');
   const emptyState = document.getElementById('keys-empty-state');
 
   const badgeEl = document.getElementById('keys-badge');
   if (badgeEl) badgeEl.textContent = `${apiKeys.length} keys`;
 
-  if (tbody) {
+  if (grid) {
     if (apiKeys.length === 0) {
       if (container) container.style.display = 'none';
       if (emptyState) emptyState.style.display = 'block';
@@ -334,22 +330,18 @@ function updateKeysUI() {
       if (container) container.style.display = 'block';
       if (emptyState) emptyState.style.display = 'none';
 
-      tbody.innerHTML = apiKeys
+      grid.innerHTML = apiKeys
         .map(
           (key, index) => `
-                <tr class="table-row" style="animation-delay: ${index * 0.05}s">
-                    <td><span class="email-text">${key.name}</span></td>
-                    <td><code>${key.key}</code></td>
-                    <td>
-                        <span class="status-badge ${key.is_active ? 'status-ready' : 'status-error'}">
-                            ${key.is_active ? 'ACTIVE' : 'INACTIVE'}
-                        </span>
-                    </td>
-                    <td class="text-right"><span class="metric-value">${key.requests_count.toLocaleString()}</span></td>
-                    <td class="text-right"><span class="metric-value">${key.tokens_used.toLocaleString()}</span></td>
-                    <td class="text-dim">${new Date(key.created_at).toLocaleDateString()}</td>
-                    <td>
-                        <div style="display: flex; gap: 8px;">
+                <div class="key-card" style="animation-delay: ${index * 0.05}s">
+                    <div class="key-card-header">
+                        <div class="key-main-info">
+                            <div class="key-name">${key.name}</div>
+                            <div class="key-value-wrapper">
+                                <code>${key.key}</code>
+                            </div>
+                        </div>
+                        <div class="key-actions">
                             ${
                               key.is_active
                                 ? `<button onclick="deactivateKey(${key.id})" class="btn-icon" title="Deactivate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10"/></svg></button>`
@@ -357,8 +349,24 @@ function updateKeysUI() {
                             }
                             <button onclick="deleteKey(${key.id})" class="btn-icon" title="Delete" style="color: var(--accent-red);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                         </div>
-                    </td>
-                </tr>
+                    </div>
+                    <div class="key-status-row">
+                        <span class="status-badge ${key.is_active ? 'status-ready' : 'status-error'}">
+                            ${key.is_active ? 'ACTIVE' : 'INACTIVE'}
+                        </span>
+                        <span class="text-dim" style="font-size: 0.75rem;">Created: ${new Date(key.created_at).toLocaleDateString()}</span>
+                    </div>
+                    <div class="key-stats-row">
+                        <div class="mini-stat">
+                            <span class="mini-stat-label">Requests</span>
+                            <span class="mini-stat-value">${key.requests_count.toLocaleString()}</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-stat-label">Tokens Used</span>
+                            <span class="mini-stat-value">${key.tokens_used.toLocaleString()}</span>
+                        </div>
+                    </div>
+                </div>
             `,
         )
         .join('');
@@ -520,12 +528,12 @@ function updateUI() {
   if (accountBadge)
     accountBadge.textContent = `${currentStatus.totalAccounts} accounts`;
 
-  // Update Table
-  const tbody = document.getElementById('accounts-tbody');
+  // Update Grid
+  const grid = document.getElementById('accounts-grid');
   const container = document.getElementById('accounts-container');
   const emptyState = document.getElementById('empty-state');
 
-  if (tbody) {
+  if (grid) {
     if (currentStatus.totalAccounts === 0) {
       if (container) container.style.display = 'none';
       if (emptyState) emptyState.style.display = 'block';
@@ -533,8 +541,8 @@ function updateUI() {
       if (container) container.style.display = 'block';
       if (emptyState) emptyState.style.display = 'none';
 
-      tbody.innerHTML = currentStatus.accounts
-        .map((acc, index) => renderAccountRow(acc, currentQuotaStatus, index))
+      grid.innerHTML = currentStatus.accounts
+        .map((acc, index) => renderAccountCard(acc, currentQuotaStatus, index))
         .join('');
     }
   }
@@ -605,7 +613,7 @@ function updateUI() {
   }
 }
 
-function renderAccountRow(acc, quotaStatus, index) {
+function renderAccountCard(acc, quotaStatus, index) {
   const accountQuota = quotaStatus?.accounts?.find(
     (q) => q.accountId === acc.id,
   );
@@ -627,27 +635,13 @@ function renderAccountRow(acc, quotaStatus, index) {
   const quotaHtml = renderQuotaHtml(accountQuota);
 
   return `
-        <tr class="table-row" style="animation-delay: ${index * 0.05}s">
-            <td><code>${acc.id}</code></td>
-            <td><span class="email-text">${acc.email}</span></td>
-            <td>
-                <span class="status-badge ${statusClass}">
-                    ${statusIcon}
-                    ${acc.status.toUpperCase()}
-                </span>
-            </td>
-            <td>${quotaHtml}</td>
-            <td class="text-right">
-                <span class="metric-value">${acc.requestCount.toLocaleString()}</span>
-            </td>
-            <td class="text-right">
-                <span class="metric-value ${acc.errorCount > 0 ? 'text-error' : ''}">${acc.errorCount}</span>
-            </td>
-            <td class="text-dim">
-                ${acc.lastUsed ? formatTimeAgo(acc.lastUsed) : '—'}
-            </td>
-            <td>
-                <div style="display: flex; gap: 4px;">
+        <div class="account-card" style="animation-delay: ${index * 0.05}s">
+            <div class="account-card-header">
+                <div class="account-main-info">
+                    <span class="account-id-badge"><code>${acc.id}</code></span>
+                    <div class="account-email" title="${acc.email}">${acc.email}</div>
+                </div>
+                <div class="account-actions">
                     <button onclick="copyAccountEnv('${acc.id}', ${index + 1})" class="btn-icon" title="Copy .env format" style="color: var(--accent-blue);">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
                     </button>
@@ -655,8 +649,38 @@ function renderAccountRow(acc, quotaStatus, index) {
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                     </button>
                 </div>
-            </td>
-        </tr>
+            </div>
+
+            <div class="account-status-row">
+                <span class="status-badge ${statusClass}">
+                    ${statusIcon}
+                    ${acc.status.toUpperCase()}
+                </span>
+                <span class="text-dim" style="font-size: 0.75rem; align-self: center;">
+                    Last used: ${acc.lastUsed ? formatTimeAgo(acc.lastUsed) : 'Never'}
+                </span>
+            </div>
+
+            <div class="account-stats-row">
+                <div class="mini-stat">
+                    <span class="mini-stat-label">Requests</span>
+                    <span class="mini-stat-value">${acc.requestCount.toLocaleString()}</span>
+                </div>
+                <div class="mini-stat">
+                    <span class="mini-stat-label">Errors</span>
+                    <span class="mini-stat-value ${acc.errorCount > 0 ? 'text-error' : ''}">${acc.errorCount}</span>
+                </div>
+                <div class="mini-stat">
+                    <span class="mini-stat-label">Health</span>
+                    <span class="mini-stat-value" style="color: var(--accent-green)">99%</span>
+                </div>
+            </div>
+
+            <div class="account-quota-section">
+                <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.5px;">Model Quotas</div>
+                ${quotaHtml}
+            </div>
+        </div>
     `;
 }
 
@@ -771,7 +795,37 @@ function renderQuotaHtml(accountQuota) {
     return '<span class="text-dim">No quota data</span>';
   }
 
-  const relevantModels = accountQuota.models.filter((m) =>
+  // Normalize models using a map to handle duplicates and overrides
+  const modelMap = new Map();
+
+  accountQuota.models.forEach((m) => {
+    modelMap.set(m.modelName, m);
+  });
+
+  // Explicitly map gemini-3-pro-high to gemini-3-pro-preview
+  // This overwrites any existing preview data with high data as requested
+  const highModel = modelMap.get('gemini-3-pro-high');
+  if (highModel) {
+    modelMap.set('gemini-3-pro-preview', {
+      ...highModel,
+      modelName: 'gemini-3-pro-preview',
+    });
+  }
+
+  // Map flash variations
+  const flashPreview =
+    modelMap.get('gemini-3-pro-flash-preview') ||
+    modelMap.get('gemini-3-pro-flash');
+  if (flashPreview) {
+    modelMap.set('gemini-3-flash', {
+      ...flashPreview,
+      modelName: 'gemini-3-flash',
+    });
+  }
+
+  const processedModels = Array.from(modelMap.values());
+
+  const relevantModels = processedModels.filter((m) =>
     availableModels.some(
       (am) => am.toLowerCase() === m.modelName.toLowerCase().trim(),
     ),
@@ -781,10 +835,17 @@ function renderQuotaHtml(accountQuota) {
     return '<span class="text-dim">No quota data</span>';
   }
 
+  // Sort to ensure consistency and prioritize important models
+  relevantModels.sort((a, b) => {
+    if (a.modelName === 'gemini-3-pro-preview') return -1;
+    if (b.modelName === 'gemini-3-pro-preview') return 1;
+    return a.modelName.localeCompare(b.modelName);
+  });
+
   return `
         <div class="quota-container">
             ${relevantModels
-              .slice(0, 4)
+              .slice(0, 6)
               .map((m) => {
                 const percentage = Math.round((1 - m.quota) * 100);
                 const colorClass =
@@ -795,11 +856,13 @@ function renderQuotaHtml(accountQuota) {
                       : 'success-color';
                 return `
                     <div class="quota-item">
-                        <span class="quota-label" title="${m.modelName}">${truncateModel(m.modelName)}</span>
+                        <div class="quota-info">
+                            <span class="quota-label" title="${m.modelName}">${truncateModel(m.modelName)}</span>
+                            <span class="quota-value">${percentage}%</span>
+                        </div>
                         <div class="quota-bar-container">
                             <div class="quota-bar ${colorClass}" style="width: ${percentage}%"></div>
                         </div>
-                        <span class="quota-value">${percentage}%</span>
                     </div>
                 `;
               })

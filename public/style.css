@@ -755,48 +755,132 @@ body::before {
 }
 
 /* ==========================================
-   TABLE
+   CARDS COMMON (ACCOUNTS & KEYS)
    ========================================== */
 
-.table-wrapper {
-  overflow-x: auto;
+.accounts-grid,
+.keys-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  padding: 24px 0;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
+.account-card,
+.key-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  transition: all var(--transition-bounce);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+  animation: fadeInUp 0.5s ease forwards;
+  opacity: 0;
 }
 
-th {
-  text-align: left;
-  padding: 16px 24px;
+.account-card:hover,
+.key-card:hover {
+  transform: translateY(-8px);
+  border-color: var(--accent-blue);
+  box-shadow:
+    var(--shadow-lg),
+    0 0 20px var(--accent-blue-dim);
+}
+
+.account-card-header,
+.key-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.account-main-info,
+.key-main-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.account-id-badge {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.7rem;
-  font-weight: 800;
+  color: var(--accent-purple);
+  background: var(--accent-purple-dim);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  align-self: flex-start;
+  margin-bottom: 4px;
+}
+
+.account-email,
+.key-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 250px;
+}
+
+.account-status-row,
+.key-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.account-stats-row,
+.key-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  background: var(--bg-glass);
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-color);
+}
+
+.key-stats-row {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.mini-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mini-stat-label {
+  font-size: 0.6rem;
   color: var(--text-dim);
   text-transform: uppercase;
-  letter-spacing: 1px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-glass);
+  font-weight: 700;
 }
 
-td {
-  padding: 20px 24px;
+.mini-stat-value {
   font-size: 0.9rem;
-  border-bottom: 1px solid var(--border-color);
-  transition: all var(--transition-fast);
+  font-weight: 700;
+  color: var(--text-secondary);
 }
 
-tr {
-  transition: all var(--transition-fast);
+.account-actions,
+.key-actions {
+  display: flex;
+  gap: 8px;
 }
 
-tr:hover td {
-  background: var(--bg-hover);
+.account-quota-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
 }
 
-.table-row {
-  animation: fadeInUp 0.4s ease forwards;
-  opacity: 0;
+.key-value-wrapper {
+  margin-top: 4px;
 }
 
 .text-right {
@@ -817,14 +901,26 @@ code {
   font-size: 0.85rem;
   color: var(--accent-purple);
   background: var(--accent-purple-dim);
-  padding: 6px 12px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.account-id-cell {
+  max-width: 120px;
+}
+
+.email-cell {
+  min-width: 200px;
 }
 
 .email-text {
   color: var(--text-primary);
   font-weight: 600;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .metric-value {
@@ -840,10 +936,10 @@ code {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: var(--radius-full);
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -885,35 +981,45 @@ code {
    ========================================== */
 
 .quota-container {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 220px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  min-width: 280px;
+  max-width: 400px;
 }
 
 .quota-item {
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-tertiary);
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.quota-info {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  font-size: 0.8rem;
 }
 
 .quota-label {
-  width: 130px;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  font-weight: 600;
+  color: var(--text-dim);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .quota-bar-container {
-  flex: 1;
-  height: 8px;
+  height: 4px;
   background: var(--bg-primary);
   border-radius: var(--radius-full);
   overflow: hidden;
-  margin: 0 12px;
   border: 1px solid var(--border-color);
 }
 
