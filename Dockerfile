@@ -22,6 +22,7 @@ WORKDIR /app
 
 # Copiar apenas os arquivos necessários do estágio de build
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 
