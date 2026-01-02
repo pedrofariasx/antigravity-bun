@@ -48,7 +48,7 @@ export const MODEL_OWNERS: Record<string, string> = {
 
 export const QUOTA_GROUPS: Record<string, string[]> = {
   claude: ['claude-sonnet-4-5', 'claude-opus-4-5', 'gpt-oss-120b-medium'],
-  'gemini-3-pro': ['gemini-3-pro-preview'],
+  'gemini-3-pro': ['gemini-3-pro-preview', 'gemini-3-pro-high'],
   'gemini-3-flash': ['gemini-3-flash'],
   'gemini-2.5-flash': ['gemini-2.5-flash', 'gemini-2.5-flash-lite'],
 };

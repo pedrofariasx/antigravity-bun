@@ -109,6 +109,12 @@ export class QuotaService {
         );
       }
     }
+
+    // Mirror gemini-3-pro-high to gemini-3-pro-preview if available
+    const highQuota = accountCache.get('gemini-3-pro-high');
+    if (highQuota) {
+      accountCache.set('gemini-3-pro-preview', { ...highQuota });
+    }
   }
 
   getQuotaStatus(

@@ -720,6 +720,48 @@ window.resetDatabase = async function () {
   }
 };
 
+window.exportDatabase = function () {
+  window.location.href = '/api/database/export';
+};
+
+window.triggerImport = function () {
+  document.getElementById('db-import-file').click();
+};
+
+window.importDatabase = async function (event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (!confirm('Importing will overwrite current data. Are you sure?')) {
+    event.target.value = '';
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const res = await fetch('/api/database/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        showToast('Database imported successfully!');
+        setTimeout(() => window.location.reload(), 1000);
+      } else {
+        const err = await res.json();
+        showToast('Import failed: ' + err.error, 'error');
+      }
+    } catch (err) {
+      showToast('Invalid JSON file', 'error');
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+};
+
 function renderQuotaHtml(accountQuota) {
   if (
     !accountQuota ||

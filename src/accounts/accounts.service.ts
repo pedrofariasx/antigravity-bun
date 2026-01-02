@@ -66,6 +66,13 @@ export class AccountsService implements OnModuleInit {
     this.loadAccounts();
   }
 
+  public reloadAccounts(): void {
+    this.accountStatesMap.clear();
+    this.accountsList = [];
+    this.emailToIdMap.clear();
+    this.loadAccounts();
+  }
+
   private loadAccounts(): void {
     // 1. Load all from DB
     const dbAccounts = this.databaseService.getAccounts() as any[];

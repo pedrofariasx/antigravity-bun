@@ -345,4 +345,66 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.initTables();
     return { success: true };
   }
+
+  exportData() {
+    const tables = ['accounts', 'api_keys', 'request_logs'];
+    const data: Record<string, any[]> = {};
+
+    for (const table of tables) {
+      try {
+        data[table] = this.db.prepare(`SELECT * FROM ${table}`).all();
+      } catch (e) {
+        this.logger.error(`Failed to export table ${table}: ${e.message}`);
+        data[table] = [];
+      }
+    }
+
+    return data;
+  }
+
+  importData(data: Record<string, any[]>) {
+    const transaction = this.db.transaction(
+      (payload: Record<string, any[]>) => {
+        // Clear existing data (optional, but safer for a full import)
+        this.db.prepare('DELETE FROM accounts').run();
+        this.db.prepare('DELETE FROM api_keys').run();
+        // We keep request logs or clear them? User might want to keep history,
+        // but typically import/export is for settings. Let's include logs if present.
+        if (payload.request_logs)
+          this.db.prepare('DELETE FROM request_logs').run();
+
+        if (payload.accounts) {
+          const stmt = this.db.prepare(`
+          INSERT INTO accounts (id, email, access_token, refresh_token, expiry_date, project_id, status, last_used_at, request_count, error_count, created_at)
+          VALUES (@id, @email, @access_token, @refresh_token, @expiry_date, @project_id, @status, @last_used_at, @request_count, @error_count, @created_at)
+        `);
+          for (const row of payload.accounts) stmt.run(row);
+        }
+
+        if (payload.api_keys) {
+          const stmt = this.db.prepare(`
+          INSERT INTO api_keys (id, key, name, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute)
+          VALUES (@id, @key, @name, @created_at, @last_used_at, @is_active, @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute)
+        `);
+          for (const row of payload.api_keys) stmt.run(row);
+        }
+
+        if (payload.request_logs) {
+          const stmt = this.db.prepare(`
+          INSERT INTO request_logs (id, api_key_id, model, tokens_input, tokens_output, latency_ms, status, error_message, created_at)
+          VALUES (@id, @api_key_id, @model, @tokens_input, @tokens_output, @latency_ms, @status, @error_message, @created_at)
+        `);
+          for (const row of payload.request_logs) stmt.run(row);
+        }
+      },
+    );
+
+    try {
+      transaction(data);
+      return { success: true };
+    } catch (e) {
+      this.logger.error(`Import failed: ${e.message}`);
+      throw e;
+    }
+  }
 }
