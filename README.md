@@ -1,151 +1,151 @@
 # 🚀 Antigravity
 
-> **⚠️ Aviso**: Este projeto utiliza a API interna do Google. Use por sua conta e risco.
+> **⚠️ Warning**: This project uses internal Google APIs. Use at your own risk.
 
-**Antigravity** é um proxy compatível com as APIs da OpenAI e Anthropic, que utiliza a API do Google Gemini (Antigravity) como backend. Ele permite usar modelos como Claude e GPT através de contas Google gratuitas.
+**Antigravity** is a proxy compatible with OpenAI and Anthropic APIs, utilizing Google's Gemini API (Antigravity) as the backend. It allows you to use models like Claude and GPT through free Google accounts.
 
-## 📋 Índice
+## 📋 Table of Contents
 
-- [Como Funciona](#-como-funciona)
-- [Instalação](#-instalação)
-- [Configuração Inicial](#-configuração-inicial)
+- [How It Works](#-how-it-works)
+- [Installation](#-installation)
+- [Initial Setup](#-initial-setup)
 - [Dashboard](#-dashboard)
 - [API Keys](#-api-keys)
-- [Endpoints da API](#-endpoints-da-api)
-- [Modelos Disponíveis](#-modelos-disponíveis)
-- [Modo de Raciocínio (Thinking)](#-modo-de-raciocínio-thinking)
-- [Rotação de Contas](#-rotação-de-contas)
-- [Banco de Dados](#-banco-de-dados)
+- [API Endpoints](#-api-endpoints)
+- [Available Models](#-available-models)
+- [Thinking Mode](#-thinking-mode)
+- [Account Rotation](#-account-rotation)
+- [Database](#-database)
 - [Docker](#-docker)
 
 ---
 
-## 🔄 Como Funciona
+## 🔄 How It Works
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Seu App       │────▶│   Antigravity   │────▶│  Google API     │
+│   Your App      │────▶│   Antigravity   │────▶│  Google API     │
 │  (OpenAI SDK)   │◀────│     Proxy       │◀────│  (Antigravity)  │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
 
-1. **Sua aplicação** envia requisições no formato OpenAI ou Anthropic
-2. **Antigravity** traduz para o formato do Google Antigravity
-3. **Google API** processa e retorna a resposta
-4. **Antigravity** converte de volta para o formato esperado
+1. **Your application** sends requests in OpenAI or Anthropic format.
+2. **Antigravity** translates them to the Google Antigravity format.
+3. **Google API** processes and returns the response.
+4. **Antigravity** converts it back to the expected format.
 
-**Benefícios:**
+**Benefits:**
 
-- ✅ Use SDKs existentes da OpenAI/Anthropic sem modificação
-- ✅ Múltiplas contas Google para rotação automática
-- ✅ Dashboard para monitoramento em tempo real
-- ✅ Logs de requisições persistidos em SQLite
-- ✅ Sistema de API Keys para controle de acesso
+- ✅ Use existing OpenAI/Anthropic SDKs without modification
+- ✅ Automatic rotation of multiple Google accounts
+- ✅ Real-time monitoring dashboard
+- ✅ SQLite persisted request logs
+- ✅ API Key system for access control
 
 ---
 
-## 📦 Instalação
+## 📦 Installation
 
-### Pré-requisitos
+### Prerequisites
 
 - Node.js 18+
-- npm ou yarn
+- npm or yarn
 
-### Instalação
+### Installation
 
 ```bash
-# Clone o repositório
-git clone https://github.com/seu-usuario/antigravity.git
+# Clone the repository
+git clone https://github.com/your-username/antigravity.git
 cd antigravity
 
-# Instale as dependências
+# Install dependencies
 npm install
 
-# Copie o arquivo de configuração
+# Copy configuration file
 cp .env.example .env
 
-# Inicie em modo desenvolvimento
+# Start in development mode
 npm run start:dev
 ```
 
-O servidor estará disponível em `http://localhost:3000`
+The server will be available at `http://localhost:3000`
 
 ---
 
-## ⚙️ Configuração Inicial
+## ⚙️ Initial Setup
 
-### 1. Configurar Credenciais do Dashboard
+### 1. Configure Dashboard Credentials
 
-Edite o arquivo `.env`:
+Edit the `.env` file:
 
 ```env
-# Credenciais para acessar o Dashboard
+# Credentials to access the Dashboard
 DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=sua_senha_segura
+DASHBOARD_PASSWORD=your_secure_password
 ```
 
-### 2. Adicionar Contas Google
+### 2. Add Google Accounts
 
-Existem duas formas de adicionar contas:
+There are two ways to add accounts:
 
-#### Opção A: Via Interface Web (Recomendado)
+#### Option A: Via Web Interface (Recommended)
 
-1. Acesse `http://localhost:3000/`
-2. Faça login com as credenciais do dashboard
-3. Clique em **"Add Account"**
-4. Autentique com sua conta Google
-5. A conta será salva automaticamente no banco de dados
+1. Access `http://localhost:3000/`
+2. Log in with dashboard credentials
+3. Click on **"Add Account"**
+4. Authenticate with your Google account
+5. The account will be automatically saved to the database
 
-#### Opção B: Via Variáveis de Ambiente (Migração Inicial)
+#### Option B: Via Environment Variables (Initial Migration)
 
 ```env
-ANTIGRAVITY_ACCOUNTS_1='{"email":"conta1@gmail.com","accessToken":"ya29.xxx","refreshToken":"1//xxx","expiryDate":1749123456789}'
-ANTIGRAVITY_ACCOUNTS_2='{"email":"conta2@gmail.com","accessToken":"ya29.yyy","refreshToken":"1//yyy","expiryDate":1749123456789}'
+ANTIGRAVITY_ACCOUNTS_1='{"email":"account1@gmail.com","accessToken":"ya29.xxx","refreshToken":"1//xxx","expiryDate":1749123456789}'
+ANTIGRAVITY_ACCOUNTS_2='{"email":"account2@gmail.com","accessToken":"ya29.yyy","refreshToken":"1//yyy","expiryDate":1749123456789}'
 ```
 
-> **Nota**: Contas do `.env` são migradas para o SQLite na primeira execução.
+> **Note**: Accounts from `.env` are migrated to SQLite on the first run.
 
 ---
 
 ## 🖥️ Dashboard
 
-O Dashboard oferece uma interface web completa para gerenciamento:
+The Dashboard offers a complete web interface for management:
 
 **URL:** `http://localhost:3000/`
 
-### Funcionalidades
+### Features
 
-| Seção         | Descrição                                       |
+| Section       | Description                                     |
 | ------------- | ----------------------------------------------- |
-| **Dashboard** | Visão geral das contas, status e quota          |
-| **Models**    | Lista de modelos disponíveis e suas capacidades |
-| **API Keys**  | Gerenciamento de chaves de API                  |
-| **Docs**      | Documentação Swagger interativa                 |
+| **Dashboard** | Overview of accounts, status, and quota         |
+| **Models**    | List of available models and their capabilities |
+| **API Keys**  | API key management                              |
+| **Docs**      | Interactive Swagger documentation               |
 
-### Métricas Exibidas
+### Displayed Metrics
 
-- Total de contas configuradas
-- Contas prontas (ready)
-- Contas em cooldown (rate limited temporariamente)
-- Contas com erro
-- Quota de uso por modelo
+- Total configured accounts
+- Ready accounts
+- Accounts in cooldown (temporarily rate-limited)
+- Accounts with errors
+- Usage quota per model
 
 ---
 
 ## 🔑 API Keys
 
-O sistema de API Keys permite controlar o acesso à API proxy.
+The API Keys system allows controlling access to the proxy API.
 
-### Criar uma API Key
+### Create an API Key
 
-1. Acesse o Dashboard → **API Keys**
-2. Clique em **"Create API Key"**
-3. Defina um nome e limites (opcional)
-4. Copie a chave gerada
+1. Go to Dashboard → **API Keys**
+2. Click on **"Create API Key"**
+3. Define a name and limits (optional)
+4. Copy the generated key
 
-### Usar a API Key
+### Use the API Key
 
-Inclua a chave no header `Authorization`:
+Include the key in the `Authorization` header:
 
 ```bash
 curl http://localhost:3000/v1/chat/completions \
@@ -154,38 +154,38 @@ curl http://localhost:3000/v1/chat/completions \
   -d '{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
-### Modo Aberto vs Protegido
+### Open vs Protected Mode
 
-- **Sem API Keys criadas**: API fica aberta (qualquer um pode usar)
-- **Com API Keys criadas**: Apenas requisições autenticadas são aceitas
-
----
-
-## 🌐 Endpoints da API
-
-| Endpoint               | Método | Formato   | Descrição        |
-| ---------------------- | ------ | --------- | ---------------- |
-| `/v1/chat/completions` | POST   | OpenAI    | Chat completion  |
-| `/v1/messages`         | POST   | Anthropic | Mensagens Claude |
-| `/v1/models`           | GET    | OpenAI    | Lista modelos    |
-| `/v1/quota`            | GET    | -         | Status da quota  |
-| `/docs`                | GET    | Swagger   | Documentação API |
-| `/health`              | GET    | -         | Health check     |
-
-### Endpoints do Dashboard
-
-| Endpoint           | Descrição                |
-| ------------------ | ------------------------ |
-| `/`                | Dashboard principal      |
-| `/login`           | Página de login          |
-| `/accounts/add`    | Adicionar conta Google   |
-| `/accounts/status` | Status das contas (JSON) |
+- **No API Keys created**: API is open (anyone can use it)
+- **With API Keys created**: Only authenticated requests are accepted
 
 ---
 
-## 🤖 Modelos Disponíveis
+## 🌐 API Endpoints
 
-| Modelo                  | Provedor Original | Max Tokens |
+| Endpoint               | Method | Format    | Description     |
+| ---------------------- | ------ | --------- | --------------- |
+| `/v1/chat/completions` | POST   | OpenAI    | Chat completion |
+| `/v1/messages`         | POST   | Anthropic | Claude messages |
+| `/v1/models`           | GET    | OpenAI    | List models     |
+| `/v1/quota`            | GET    | -         | Quota status    |
+| `/docs`                | GET    | Swagger   | API Docs        |
+| `/health`              | GET    | -         | Health check    |
+
+### Dashboard Endpoints
+
+| Endpoint           | Description           |
+| ------------------ | --------------------- |
+| `/`                | Main dashboard        |
+| `/login`           | Login page            |
+| `/accounts/add`    | Add Google account    |
+| `/accounts/status` | Account status (JSON) |
+
+---
+
+## 🤖 Available Models
+
+| Model                   | Original Provider | Max Tokens |
 | ----------------------- | ----------------- | ---------- |
 | `gemini-3-pro-preview`  | Google            | 65,536     |
 | `gemini-3-flash`        | Google            | 65,536     |
@@ -197,94 +197,94 @@ curl http://localhost:3000/v1/chat/completions \
 
 ---
 
-## 🧠 Modo de Raciocínio (Thinking)
+## 🧠 Thinking Mode
 
-Ative o modo de raciocínio para respostas mais elaboradas:
+Activate thinking mode for more elaborate responses:
 
 ```json
 {
   "model": "claude-sonnet-4-5",
-  "messages": [{ "role": "user", "content": "Resolva esta equação..." }],
+  "messages": [{ "role": "user", "content": "Solve this equation..." }],
   "reasoning_effort": "high",
   "stream": true
 }
 ```
 
-### Níveis Disponíveis
+### Available Levels
 
-| Nível    | Descrição                                      |
-| -------- | ---------------------------------------------- |
-| `low`    | Raciocínio básico, respostas mais rápidas      |
-| `medium` | Equilíbrio entre velocidade e profundidade     |
-| `high`   | Raciocínio profundo, respostas mais elaboradas |
+| Level    | Description                              |
+| -------- | ---------------------------------------- |
+| `low`    | Basic reasoning, faster responses        |
+| `medium` | Balance between speed and depth          |
+| `high`   | Deep reasoning, more elaborate responses |
 
-### Comportamento por Modelo
+### Behavior by Model
 
-| Modelo                 | Implementação                            |
-| ---------------------- | ---------------------------------------- |
-| `gemini-3-pro-preview` | Usa `thinkingLevel` (low/high)           |
-| `gemini-2.5-flash`     | Usa `thinkingBudget`                     |
-| `claude-sonnet-4-5`    | Usa `thinkingBudget` (8k/16k/32k tokens) |
-| `claude-opus-4-5`      | Sempre usa thinking (parâmetro opcional) |
+| Model                  | Implementation                            |
+| ---------------------- | ----------------------------------------- |
+| `gemini-3-pro-preview` | Uses `thinkingLevel` (low/high)           |
+| `gemini-2.5-flash`     | Uses `thinkingBudget`                     |
+| `claude-sonnet-4-5`    | Uses `thinkingBudget` (8k/16k/32k tokens) |
+| `claude-opus-4-5`      | Always uses thinking (optional parameter) |
 
-> **Limitação**: Modelos Claude só retornam `reasoning_content` em modo streaming.
+> **Limitation**: Claude models only return `reasoning_content` in streaming mode.
 
 ---
 
-## 🔄 Rotação de Contas
+## 🔄 Account Rotation
 
-O Antigravity gerencia automaticamente múltiplas contas Google:
+Antigravity automatically manages multiple Google accounts:
 
-### Como Funciona
+### How It Works
 
-1. **Seleção Inteligente**: Escolhe a conta com mais quota disponível
-2. **Cooldown Automático**: Contas rate-limited entram em cooldown
-3. **Recuperação**: Contas voltam ao pool após o período de cooldown
+1. **Smart Selection**: Chooses the account with the most available quota.
+2. **Automatic Cooldown**: Rate-limited accounts enter cooldown.
+3. **Recovery**: Accounts return to the pool after the cooldown period.
 
-### Configuração
+### Configuration
 
 ```env
-# Tempo de cooldown base (ms)
+# Base cooldown time (ms)
 COOLDOWN_DURATION_MS=60000
 
-# Máximo de tentativas antes de erro
+# Max attempts before error
 MAX_RETRY_ACCOUNTS=3
 ```
 
-### Estados das Contas
+### Account States
 
-| Status     | Descrição                              |
+| Status     | Description                            |
 | ---------- | -------------------------------------- |
-| `ready`    | Pronta para uso                        |
-| `cooldown` | Rate limited, aguardando recuperação   |
-| `error`    | Erro persistente (token inválido, etc) |
+| `ready`    | Ready for use                          |
+| `cooldown` | Rate limited, waiting for recovery     |
+| `error`    | Persistent error (invalid token, etc.) |
 
 ---
 
-## 💾 Banco de Dados
+## 💾 Database
 
-O Antigravity usa SQLite para persistência:
+Antigravity uses SQLite for persistence:
 
-**Localização:** `data/antigravity.db`
+**Location:** `data/antigravity.db`
 
-### Tabelas
+### Tables
 
-| Tabela         | Descrição                      |
-| -------------- | ------------------------------ |
-| `accounts`     | Contas Google (tokens, status) |
-| `api_keys`     | API keys gerenciadas           |
-| `request_logs` | Logs de todas as requisições   |
-| `sessions`     | Sessões do dashboard           |
+| Table          | Description                      |
+| -------------- | -------------------------------- |
+| `accounts`     | Google accounts (tokens, status) |
+| `api_keys`     | Managed API keys                 |
+| `request_logs` | Logs of all requests             |
+| `sessions`     | Dashboard sessions               |
 
-### Logs de Requisições
+### Request Logs
 
-Cada requisição é registrada com:
+Each request is logged with:
 
-- Modelo utilizado
-- Tokens de entrada/saída
-- Latência (ms)
+- Used model
+- Input/output tokens
+- Latency (ms)
 - Status (success/error)
-- API key usada
+- Used API key
 - Timestamp
 
 ---
@@ -327,45 +327,45 @@ services:
 
 ---
 
-## 📁 Estrutura do Projeto
+## 📁 Project Structure
 
 ```
 antigravity/
 ├── src/
-│   ├── accounts/        # Gerenciamento de contas Google
-│   ├── antigravity/     # Lógica do proxy (transformers, service)
-│   ├── api-keys/        # Sistema de API keys
-│   ├── auth/            # Autenticação do dashboard
-│   ├── common/          # Utilitários compartilhados
-│   ├── config/          # Configuração
-│   ├── database/        # Serviço SQLite
-│   ├── oauth/           # Fluxo OAuth Google
-│   └── quota/           # Gerenciamento de quota
-├── public/              # Assets do dashboard
-├── data/                # Banco de dados SQLite
-└── docs/                # Documentação adicional
+│   ├── accounts/        # Google accounts management
+│   ├── antigravity/     # Proxy logic (transformers, service)
+│   ├── api-keys/        # API keys system
+│   ├── auth/            # Dashboard authentication
+│   ├── common/          # Shared utilities
+│   ├── config/          # Configuration
+│   ├── database/        # SQLite service
+│   ├── oauth/           # Google OAuth flow
+│   └── quota/           # Quota management
+├── public/              # Dashboard assets
+├── data/                # SQLite database
+└── docs/                # Additional documentation
 ```
 
 ---
 
-## 🔧 Variáveis de Ambiente
+## 🔧 Environment Variables
 
-| Variável               | Padrão | Descrição                |
-| ---------------------- | ------ | ------------------------ |
-| `PORT`                 | 3000   | Porta do servidor        |
-| `DASHBOARD_USERNAME`   | admin  | Usuário do dashboard     |
-| `DASHBOARD_PASSWORD`   | admin  | Senha do dashboard       |
-| `COOLDOWN_DURATION_MS` | 60000  | Tempo de cooldown (ms)   |
-| `MAX_RETRY_ACCOUNTS`   | 3      | Tentativas antes de erro |
+| Variable               | Default | Description           |
+| ---------------------- | ------- | --------------------- |
+| `PORT`                 | 3000    | Server port           |
+| `DASHBOARD_USERNAME`   | admin   | Dashboard username    |
+| `DASHBOARD_PASSWORD`   | admin   | Dashboard password    |
+| `COOLDOWN_DURATION_MS` | 60000   | Cooldown time (ms)    |
+| `MAX_RETRY_ACCOUNTS`   | 3       | Attempts before error |
 
 ---
 
-## 📄 Licença
+## 📄 License
 
 MIT
 
 ---
 
-## 🤝 Contribuindo
+## 🤝 Contributing
 
-Contribuições são bem-vindas! Por favor, abra uma issue ou pull request.
+Contributions are welcome! Please open an issue or pull request.
