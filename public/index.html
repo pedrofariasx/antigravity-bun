@@ -964,12 +964,34 @@ for await (const chunk of stream) {
             />
           </div>
           <div class="form-group">
-            <label for="daily-limit">Daily Token Limit (0 = unlimited)</label>
-            <input type="number" id="daily-limit" value="0" min="0" />
+            <label for="key-description">Description (Optional)</label>
+            <input
+              type="text"
+              id="key-description"
+              placeholder="Short description of usage"
+            />
           </div>
           <div class="form-group">
-            <label for="rate-limit">Rate Limit (requests/minute)</label>
-            <input type="number" id="rate-limit" value="60" min="1" />
+            <label for="key-daily-limit"
+              >Daily Token Limit (0 = unlimited)</label
+            >
+            <input type="number" id="key-daily-limit" value="0" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="key-rate-limit">Rate Limit (requests/minute)</label>
+            <input type="number" id="key-rate-limit" value="60" min="1" />
+          </div>
+          <div class="form-group">
+            <label for="key-allowed-models"
+              >Allowed Models (Comma separated or * for all)</label
+            >
+            <input type="text" id="key-allowed-models" value="*" />
+          </div>
+          <div class="form-group">
+            <label for="key-cors-origin"
+              >Allowed CORS Origins (Comma separated or * for all)</label
+            >
+            <input type="text" id="key-cors-origin" value="*" />
           </div>
           <div
             class="form-group"
@@ -982,15 +1004,30 @@ for await (const chunk of stream) {
           >
             <input
               type="checkbox"
-              id="smart-context"
+              id="key-smart-context"
               style="width: 20px; height: 20px; cursor: pointer"
             />
             <label
-              for="smart-context"
+              for="key-smart-context"
               style="margin-bottom: 0; cursor: pointer"
             >
-              🧠 Smart Context (Auto-reduce tokens)
+              🧠 Smart Context (Pruning)
             </label>
+          </div>
+          <div
+            class="form-group"
+            id="key-smart-context-limit-container"
+            style="display: none"
+          >
+            <label for="key-smart-context-limit"
+              >Smart Context Limit (Last N messages)</label
+            >
+            <input
+              type="number"
+              id="key-smart-context-limit"
+              value="10"
+              min="1"
+            />
           </div>
           <div class="modal-actions">
             <button
@@ -1036,6 +1073,91 @@ for await (const chunk of stream) {
             Done
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Edit API Key Modal -->
+    <div id="edit-key-modal" class="modal" style="display: none">
+      <div class="modal-backdrop" onclick="hideEditKeyModal()"></div>
+      <div class="modal-content">
+        <h3>Edit API Key</h3>
+        <form id="edit-key-form">
+          <input type="hidden" id="edit-key-id" />
+          <div class="form-group">
+            <label for="edit-key-name">Key Name</label>
+            <input
+              type="text"
+              id="edit-key-name"
+              placeholder="My App"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-key-description">Description (Optional)</label>
+            <input type="text" id="edit-key-description" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-key-daily-limit"
+              >Daily Token Limit (0 for unlimited)</label
+            >
+            <input type="number" id="edit-key-daily-limit" value="0" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-key-rate-limit">Requests Per Minute</label>
+            <input type="number" id="edit-key-rate-limit" value="60" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-key-allowed-models"
+              >Allowed Models (Comma separated or * for all)</label
+            >
+            <input type="text" id="edit-key-allowed-models" value="*" />
+          </div>
+
+          <div class="form-group">
+            <label for="edit-key-cors-origin"
+              >Allowed CORS Origins (Comma separated or * for all)</label
+            >
+            <input type="text" id="edit-key-cors-origin" value="*" />
+          </div>
+
+          <div
+            class="form-group"
+            style="display: flex; align-items: center; margin-bottom: 12px"
+          >
+            <label class="switch">
+              <input type="checkbox" id="edit-key-smart-context" />
+              <span class="slider round"></span>
+            </label>
+            <span style="margin-left: 8px">Smart Context (Pruning)</span>
+          </div>
+
+          <div class="form-group" id="edit-smart-context-limit-container">
+            <label for="edit-key-smart-context-limit"
+              >Smart Context Limit (Last N messages)</label
+            >
+            <input
+              type="number"
+              id="edit-key-smart-context-limit"
+              value="10"
+              min="1"
+            />
+          </div>
+
+          <div class="modal-actions">
+            <button
+              type="button"
+              onclick="hideEditKeyModal()"
+              class="btn btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
       </div>
     </div>
 

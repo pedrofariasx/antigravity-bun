@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Delete,
   Body,
   Param,
@@ -39,6 +40,40 @@ class CreateApiKeyDto {
   @IsNumber()
   @IsOptional()
   smartContext?: number;
+}
+
+class UpdateApiKeyDto {
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsNumber()
+  @IsOptional()
+  dailyLimit?: number;
+
+  @IsNumber()
+  @IsOptional()
+  rateLimitPerMinute?: number;
+
+  @IsNumber()
+  @IsOptional()
+  smartContext?: number;
+
+  @IsNumber()
+  @IsOptional()
+  smartContextLimit?: number;
+
+  @IsString()
+  @IsOptional()
+  allowedModels?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  corsOrigin?: string;
 }
 
 @ApiTags('API Keys')
@@ -150,6 +185,32 @@ export class ApiKeysController {
     }
 
     return res.json({ success: true, message: 'API key activated' });
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update an API key' })
+  @ApiBody({ type: UpdateApiKeyDto })
+  updateKey(
+    @Req() req: Request,
+    @Res() res: Response,
+    @Param('id') id: string,
+    @Body() body: UpdateApiKeyDto,
+  ) {
+    if (!checkDashboardAuth(this.authService, req)) {
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ error: 'Unauthorized' });
+    }
+
+    const success = this.apiKeysService.updateApiKey(parseInt(id, 10), body);
+
+    if (!success) {
+      return res
+        .status(HttpStatus.NOT_FOUND)
+        .json({ error: 'API key not found' });
+    }
+
+    return res.json({ success: true, message: 'API key updated' });
   }
 
   @Delete(':id')

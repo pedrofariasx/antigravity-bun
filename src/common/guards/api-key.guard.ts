@@ -39,6 +39,66 @@ export class ApiKeyGuard implements CanActivate {
     // Validate against Database API keys
     const { valid, keyData } = this.apiKeysService.validateApiKey(token);
     if (valid && keyData) {
+      // Validate CORS Origin if specified
+      const origin = request.headers.origin as string;
+      if (
+        keyData.cors_origin &&
+        keyData.cors_origin !== '*' &&
+        origin &&
+        origin !== 'null'
+      ) {
+        const allowedOrigins = keyData.cors_origin
+          .split(',')
+          .map((o) => o.trim().toLowerCase());
+        if (!allowedOrigins.includes(origin.toLowerCase())) {
+          throw new HttpException(
+            {
+              error: {
+                message: `Origin '${origin}' is not allowed for this API key.`,
+                type: 'invalid_request_error',
+                param: 'origin',
+                code: 'cors_not_allowed',
+              },
+            },
+            HttpStatus.FORBIDDEN,
+          );
+        }
+      }
+
+      // Check if model is allowed
+      if (keyData.allowed_models && keyData.allowed_models !== '*') {
+        const allowedModels = keyData.allowed_models
+          .split(',')
+          .map((m) => m.trim().toLowerCase());
+        const requestedModel = (request.body?.model || '').toLowerCase();
+
+        if (requestedModel && !allowedModels.includes(requestedModel)) {
+          if (isAnthropicEndpoint) {
+            throw new HttpException(
+              {
+                type: 'error',
+                error: {
+                  type: 'invalid_request_error',
+                  message: `Model '${requestedModel}' is not allowed for this API key.`,
+                },
+              },
+              HttpStatus.FORBIDDEN,
+            );
+          }
+          throw new HttpException(
+            {
+              error: {
+                message: `Model '${requestedModel}' is not allowed for this API key.`,
+                type: 'invalid_request_error',
+                param: 'model',
+                code: 'model_not_allowed',
+              },
+            },
+            HttpStatus.FORBIDDEN,
+          );
+        }
+      }
+
       // Attach key info to request for logging later
       (request as any).apiKey = keyData;
       return true;

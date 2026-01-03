@@ -14,6 +14,10 @@ export interface ApiKey {
   daily_limit: number;
   rate_limit_per_minute: number;
   smart_context: number;
+  smart_context_limit: number;
+  allowed_models: string;
+  description: string | null;
+  cors_origin: string;
 }
 
 @Injectable()
@@ -30,6 +34,10 @@ export class ApiKeysService {
     dailyLimit = 0,
     rateLimitPerMinute = 60,
     smartContext = 0,
+    smartContextLimit = 10,
+    allowedModels = '*',
+    description = '',
+    corsOrigin = '*',
   ): { key: string; id: number } {
     const rawKey = this.authService.generateApiKey();
 
@@ -39,6 +47,10 @@ export class ApiKeysService {
       dailyLimit,
       rateLimitPerMinute,
       smartContext,
+      smartContextLimit,
+      allowedModels,
+      description,
+      corsOrigin,
     );
 
     this.logger.log(`Created new API key: ${name}`);
@@ -101,6 +113,24 @@ export class ApiKeysService {
     this.logger.log(
       `Smart Context ${enabled ? 'enabled' : 'disabled'} for API key ID: ${keyId}`,
     );
+    return result.changes > 0;
+  }
+
+  updateApiKey(
+    keyId: number,
+    data: {
+      name?: string;
+      dailyLimit?: number;
+      rateLimitPerMinute?: number;
+      smartContext?: number;
+      smartContextLimit?: number;
+      allowedModels?: string;
+      description?: string;
+      corsOrigin?: string;
+    },
+  ): boolean {
+    const result = this.databaseService.updateApiKey(keyId, data);
+    this.logger.log(`Updated API key ID: ${keyId}`);
     return result.changes > 0;
   }
 

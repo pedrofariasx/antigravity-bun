@@ -336,7 +336,13 @@ function updateKeysUI() {
                 <div class="key-card" style="animation-delay: ${index * 0.05}s">
                     <div class="key-card-header">
                         <div class="key-main-info">
-                            <div class="key-name">${key.name}</div>
+                            <div class="key-name">
+                                ${key.name}
+                                ${key.is_active ? '' : '<span class="badge-sm badge-error" style="margin-left: 8px;">INACTIVE</span>'}
+                            </div>
+                            <div class="key-description-row text-dim">
+                                ${key.description || 'No description provided'}
+                            </div>
                             <div class="key-value-wrapper">
                                 <code>${key.key}</code>
                             </div>
@@ -347,32 +353,44 @@ function updateKeysUI() {
                                 ? `<button onclick="deactivateKey(${key.id})" class="btn-icon" title="Deactivate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10"/></svg></button>`
                                 : `<button onclick="activateKey(${key.id})" class="btn-icon" title="Activate" style="color: var(--accent-green);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg></button>`
                             }
+                            <button onclick="showEditKeyModal(${key.id})" class="btn-icon" title="Edit" style="color: var(--accent-yellow);">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
                             <button onclick="toggleSmartContext(${key.id}, ${key.smart_context === 1 ? 'false' : 'true'})" class="btn-icon" title="${key.smart_context === 1 ? 'Disable Smart Context' : 'Enable Smart Context'}" style="color: ${key.smart_context === 1 ? 'var(--accent-blue)' : 'var(--text-dim)'};">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 18a8 8 0 118-8 8 8 0 01-8 8z"/><path d="M12 6a6 6 0 106 6 6 6 0 00-6-6z"/></svg>
                             </button>
                             <button onclick="deleteKey(${key.id})" class="btn-icon" title="Delete" style="color: var(--accent-red);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                         </div>
                     </div>
-                    <div class="key-status-row">
-                        <span class="status-badge ${key.is_active ? 'status-ready' : 'status-error'}">
-                            ${key.is_active ? 'ACTIVE' : 'INACTIVE'}
-                        </span>
-                        ${
-                          key.smart_context === 1
-                            ? `<span class="status-badge" style="background: var(--accent-blue-dim); color: var(--accent-blue); border: 1px solid var(--accent-blue);">🧠 SMART</span>`
-                            : ''
-                        }
-                        <span class="text-dim" style="font-size: 0.75rem;">Created: ${new Date(key.created_at).toLocaleDateString()}</span>
+                    
+                    <div class="key-config-summary">
+                        <div class="config-pill ${key.smart_context === 1 ? 'active' : ''}" title="Smart Context">
+                            🧠 Smart: ${key.smart_context === 1 ? key.smart_context_limit : 'Off'}
+                        </div>
+                        <div class="config-pill" title="Allowed Models">
+                            📦 Models: ${key.allowed_models === '*' ? 'All' : 'Restricted'}
+                        </div>
+                        <div class="config-pill" title="CORS Origins">
+                            🌐 CORS: ${key.cors_origin === '*' ? 'Any' : 'Restricted'}
+                        </div>
                     </div>
+
                     <div class="key-stats-row">
                         <div class="mini-stat">
                             <span class="mini-stat-label">Requests</span>
                             <span class="mini-stat-value">${key.requests_count.toLocaleString()}</span>
                         </div>
                         <div class="mini-stat">
-                            <span class="mini-stat-label">Tokens Used</span>
+                            <span class="mini-stat-label">Tokens</span>
                             <span class="mini-stat-value">${key.tokens_used.toLocaleString()}</span>
                         </div>
+                        <div class="mini-stat">
+                            <span class="mini-stat-label">Limit</span>
+                            <span class="mini-stat-value">${key.daily_limit === 0 ? '∞' : key.daily_limit.toLocaleString()}</span>
+                        </div>
+                    </div>
+                    <div class="key-footer">
+                        <span class="text-dim" style="font-size: 0.7rem;">Created: ${new Date(key.created_at).toLocaleDateString()}</span>
                     </div>
                 </div>
             `,
@@ -392,16 +410,58 @@ window.hideCreateKeyModal = function () {
   if (modal) modal.style.display = 'none';
 };
 
-const createKeyForm = document.getElementById('create-key-form');
-if (createKeyForm) {
+// Setup create key form - wrapped in function to ensure DOM is ready
+function setupCreateKeyForm() {
+  const createKeyForm = document.getElementById('create-key-form');
+  if (!createKeyForm) return;
+
+  // Show/hide limit based on checkbox
+  const smartContextCheck = document.getElementById('key-smart-context');
+  const limitContainer = document.getElementById(
+    'key-smart-context-limit-container',
+  );
+
+  if (smartContextCheck && limitContainer) {
+    smartContextCheck.addEventListener('change', () => {
+      limitContainer.style.display = smartContextCheck.checked
+        ? 'block'
+        : 'none';
+    });
+    // Initial state
+    limitContainer.style.display = smartContextCheck.checked ? 'block' : 'none';
+  }
+
   createKeyForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const name = document.getElementById('key-name').value;
-    const dailyLimit = parseInt(document.getElementById('daily-limit').value);
-    const rateLimit = parseInt(document.getElementById('rate-limit').value);
-    const smartContext = document.getElementById('smart-context').checked
-      ? 1
-      : 0;
+
+    // Get form elements safely
+    const nameEl = document.getElementById('key-name');
+    const descriptionEl = document.getElementById('key-description');
+    const dailyLimitEl = document.getElementById('key-daily-limit');
+    const rateLimitEl = document.getElementById('key-rate-limit');
+    const allowedModelsEl = document.getElementById('key-allowed-models');
+    const corsOriginEl = document.getElementById('key-cors-origin');
+    const smartContextEl = document.getElementById('key-smart-context');
+    const smartContextLimitEl = document.getElementById(
+      'key-smart-context-limit',
+    );
+
+    const name = nameEl ? nameEl.value : '';
+    const description = descriptionEl ? descriptionEl.value : '';
+    const dailyLimit = parseInt(dailyLimitEl ? dailyLimitEl.value : '0', 10);
+    const rateLimit = parseInt(rateLimitEl ? rateLimitEl.value : '60', 10);
+    const allowedModels = allowedModelsEl ? allowedModelsEl.value : '*';
+    const corsOrigin = corsOriginEl ? corsOriginEl.value : '*';
+    const smartContext = smartContextEl && smartContextEl.checked ? 1 : 0;
+    const smartContextLimit = parseInt(
+      smartContextLimitEl ? smartContextLimitEl.value : '10',
+      10,
+    );
+
+    if (!name) {
+      showToast('Please enter a key name', 'error');
+      return;
+    }
 
     try {
       const response = await fetch('/api/keys', {
@@ -409,9 +469,13 @@ if (createKeyForm) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
+          description,
           dailyLimit,
           rateLimitPerMinute: rateLimit,
+          allowedModels,
+          corsOrigin,
           smartContext,
+          smartContextLimit,
         }),
       });
 
@@ -421,15 +485,163 @@ if (createKeyForm) {
         hideCreateKeyModal();
         showNewKeyModal(data.key);
         fetchApiKeys();
+        // Reset form
+        createKeyForm.reset();
+        if (limitContainer) limitContainer.style.display = 'none';
         showToast('API key created!', 'success');
       } else {
         showToast(data.error || 'Failed to create key', 'error');
       }
     } catch (error) {
+      console.error('Error creating key:', error);
       showToast('Connection error', 'error');
     }
   });
 }
+
+// Call setup immediately and also on DOMContentLoaded as fallback
+setupCreateKeyForm();
+
+window.showEditKeyModal = function (id) {
+  const key = apiKeys.find((k) => k.id === id);
+  if (!key) {
+    console.error('API Key not found:', id);
+    showToast('API Key not found', 'error');
+    return;
+  }
+
+  const modal = document.getElementById('edit-key-modal');
+  if (!modal) {
+    console.error('Edit modal element not found');
+    showToast('Error opening edit modal', 'error');
+    return;
+  }
+
+  // Safely set form values with null checks
+  const setInputValue = (elementId, value) => {
+    const el = document.getElementById(elementId);
+    if (el) {
+      el.value = value;
+    } else {
+      console.warn('Element not found:', elementId);
+    }
+  };
+
+  setInputValue('edit-key-id', key.id);
+  setInputValue('edit-key-name', key.name);
+  setInputValue('edit-key-description', key.description || '');
+  setInputValue('edit-key-daily-limit', key.daily_limit);
+  setInputValue('edit-key-rate-limit', key.rate_limit_per_minute);
+  setInputValue('edit-key-allowed-models', key.allowed_models || '*');
+  setInputValue('edit-key-cors-origin', key.cors_origin || '*');
+  setInputValue('edit-key-smart-context-limit', key.smart_context_limit || 10);
+
+  const smartContextEl = document.getElementById('edit-key-smart-context');
+  if (smartContextEl) {
+    smartContextEl.checked = key.smart_context === 1;
+  }
+
+  const limitContainer = document.getElementById(
+    'edit-smart-context-limit-container',
+  );
+  if (limitContainer) {
+    limitContainer.style.display = key.smart_context === 1 ? 'block' : 'none';
+  }
+
+  modal.style.display = 'flex';
+};
+
+window.hideEditKeyModal = function () {
+  const modal = document.getElementById('edit-key-modal');
+  if (modal) modal.style.display = 'none';
+};
+
+// Setup edit key form - wrapped in function to ensure DOM is ready
+function setupEditKeyForm() {
+  const editKeyForm = document.getElementById('edit-key-form');
+  if (!editKeyForm) return;
+
+  const smartContextCheck = document.getElementById('edit-key-smart-context');
+  const limitContainer = document.getElementById(
+    'edit-smart-context-limit-container',
+  );
+
+  if (smartContextCheck && limitContainer) {
+    smartContextCheck.addEventListener('change', () => {
+      limitContainer.style.display = smartContextCheck.checked
+        ? 'block'
+        : 'none';
+    });
+  }
+
+  editKeyForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    // Get form elements safely
+    const idEl = document.getElementById('edit-key-id');
+    const nameEl = document.getElementById('edit-key-name');
+    const descriptionEl = document.getElementById('edit-key-description');
+    const dailyLimitEl = document.getElementById('edit-key-daily-limit');
+    const rateLimitEl = document.getElementById('edit-key-rate-limit');
+    const allowedModelsEl = document.getElementById('edit-key-allowed-models');
+    const corsOriginEl = document.getElementById('edit-key-cors-origin');
+    const smartContextEl = document.getElementById('edit-key-smart-context');
+    const smartContextLimitEl = document.getElementById(
+      'edit-key-smart-context-limit',
+    );
+
+    const id = idEl ? idEl.value : '';
+    const name = nameEl ? nameEl.value : '';
+    const description = descriptionEl ? descriptionEl.value : '';
+    const dailyLimit = parseInt(dailyLimitEl ? dailyLimitEl.value : '0', 10);
+    const rateLimit = parseInt(rateLimitEl ? rateLimitEl.value : '60', 10);
+    const allowedModels = allowedModelsEl ? allowedModelsEl.value : '*';
+    const corsOrigin = corsOriginEl ? corsOriginEl.value : '*';
+    const smartContext = smartContextEl && smartContextEl.checked ? 1 : 0;
+    const smartContextLimit = parseInt(
+      smartContextLimitEl ? smartContextLimitEl.value : '10',
+      10,
+    );
+
+    if (!id) {
+      showToast('Invalid key ID', 'error');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/keys/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description,
+          dailyLimit,
+          rateLimitPerMinute: rateLimit,
+          allowedModels,
+          corsOrigin,
+          smartContext,
+          smartContextLimit,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        hideEditKeyModal();
+        fetchApiKeys();
+        showToast('API key updated!', 'success');
+      } else {
+        showToast(data.error || 'Failed to update key', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating key:', error);
+      showToast('Connection error', 'error');
+    }
+  });
+}
+
+// Call setup immediately and also on DOMContentLoaded as fallback
+setupEditKeyForm();
 
 function showNewKeyModal(key) {
   const valEl = document.getElementById('new-key-value');
@@ -1027,6 +1239,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   `;
   document.head.appendChild(style);
+
+  // Setup forms (call again in case DOM wasn't ready before)
+  setupCreateKeyForm();
+  setupEditKeyForm();
 
   // Fetch initial data
   fetchData();

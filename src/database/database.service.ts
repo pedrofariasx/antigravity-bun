@@ -56,7 +56,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         tokens_used INTEGER DEFAULT 0,
         daily_limit INTEGER DEFAULT 0,
         rate_limit_per_minute INTEGER DEFAULT 60,
-        smart_context INTEGER DEFAULT 0
+        smart_context INTEGER DEFAULT 0,
+        smart_context_limit INTEGER DEFAULT 10,
+        allowed_models TEXT DEFAULT '*',
+        description TEXT,
+        cors_origin TEXT DEFAULT '*'
       )
     `);
 
@@ -67,6 +71,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       { name: 'daily_limit', type: 'INTEGER DEFAULT 0' },
       { name: 'rate_limit_per_minute', type: 'INTEGER DEFAULT 60' },
       { name: 'smart_context', type: 'INTEGER DEFAULT 0' },
+      { name: 'smart_context_limit', type: 'INTEGER DEFAULT 10' },
+      { name: 'allowed_models', type: "TEXT DEFAULT '*'" },
+      { name: 'description', type: 'TEXT' },
+      { name: 'cors_origin', type: "TEXT DEFAULT '*'" },
     ];
 
     for (const col of migrationColumns) {
@@ -85,8 +93,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         tokens_used = COALESCE(tokens_used, 0),
         daily_limit = COALESCE(daily_limit, 0),
         rate_limit_per_minute = COALESCE(rate_limit_per_minute, 60),
-        smart_context = COALESCE(smart_context, 0)
-      WHERE requests_count IS NULL OR tokens_used IS NULL OR daily_limit IS NULL OR rate_limit_per_minute IS NULL OR smart_context IS NULL
+        smart_context = COALESCE(smart_context, 0),
+        smart_context_limit = COALESCE(smart_context_limit, 10),
+        allowed_models = COALESCE(allowed_models, '*'),
+        cors_origin = COALESCE(cors_origin, '*')
+      WHERE requests_count IS NULL OR tokens_used IS NULL OR daily_limit IS NULL OR rate_limit_per_minute IS NULL OR smart_context IS NULL OR smart_context_limit IS NULL OR allowed_models IS NULL OR cors_origin IS NULL
     `);
 
     // Request logs table
@@ -101,7 +112,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         status TEXT,
         error_message TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
+        FOREIGN KEY (api_key_id) REFERENCES api_keys(id) ON DELETE SET NULL
       )
     `);
 
@@ -154,12 +165,86 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     dailyLimit = 0,
     rateLimitPerMinute = 60,
     smartContext = 0,
+    smartContextLimit = 10,
+    allowedModels = '*',
+    description = '',
+    corsOrigin = '*',
   ) {
     const stmt = this.db.prepare(`
-      INSERT INTO api_keys (key, name, daily_limit, rate_limit_per_minute, smart_context)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO api_keys (key, name, daily_limit, rate_limit_per_minute, smart_context, smart_context_limit, allowed_models, description, cors_origin)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    return stmt.run(key, name, dailyLimit, rateLimitPerMinute, smartContext);
+    return stmt.run(
+      key,
+      name,
+      dailyLimit,
+      rateLimitPerMinute,
+      smartContext,
+      smartContextLimit,
+      allowedModels,
+      description,
+      corsOrigin,
+    );
+  }
+
+  updateApiKey(
+    id: number,
+    data: {
+      name?: string;
+      dailyLimit?: number;
+      rateLimitPerMinute?: number;
+      smartContext?: number;
+      smartContextLimit?: number;
+      allowedModels?: string;
+      description?: string;
+      corsOrigin?: string;
+    },
+  ) {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      params.push(data.name);
+    }
+    if (data.dailyLimit !== undefined) {
+      updates.push('daily_limit = ?');
+      params.push(data.dailyLimit);
+    }
+    if (data.rateLimitPerMinute !== undefined) {
+      updates.push('rate_limit_per_minute = ?');
+      params.push(data.rateLimitPerMinute);
+    }
+    if (data.smartContext !== undefined) {
+      updates.push('smart_context = ?');
+      params.push(data.smartContext);
+    }
+    if (data.smartContextLimit !== undefined) {
+      updates.push('smart_context_limit = ?');
+      params.push(data.smartContextLimit);
+    }
+    if (data.allowedModels !== undefined) {
+      updates.push('allowed_models = ?');
+      params.push(data.allowedModels);
+    }
+    if (data.description !== undefined) {
+      updates.push('description = ?');
+      params.push(data.description);
+    }
+    if (data.corsOrigin !== undefined) {
+      updates.push('cors_origin = ?');
+      params.push(data.corsOrigin);
+    }
+
+    if (updates.length === 0) return { changes: 0 };
+
+    params.push(id);
+    const stmt = this.db.prepare(`
+      UPDATE api_keys
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `);
+    return stmt.run(...params);
   }
 
   getApiKeyByKey(key: string) {
@@ -171,7 +256,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   getAllApiKeys() {
     const stmt = this.db.prepare(
-      'SELECT id, name, key, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context FROM api_keys ORDER BY created_at DESC',
+      'SELECT id, name, key, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context, smart_context_limit, allowed_models, description, cors_origin FROM api_keys ORDER BY created_at DESC',
     );
     return stmt.all();
   }
@@ -202,8 +287,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   deleteApiKey(keyId: number) {
-    const stmt = this.db.prepare('DELETE FROM api_keys WHERE id = ?');
-    return stmt.run(keyId);
+    try {
+      this.db
+        .prepare(
+          'UPDATE request_logs SET api_key_id = NULL WHERE api_key_id = ?',
+        )
+        .run(keyId);
+      const stmt = this.db.prepare('DELETE FROM api_keys WHERE id = ?');
+      return stmt.run(keyId);
+    } catch (e) {
+      this.logger.error(`Failed to delete API key: ${e.message}`);
+      return { changes: 0 };
+    }
   }
 
   updateApiKeySmartContext(keyId: number, enabled: number) {
@@ -394,8 +489,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
         if (payload.api_keys) {
           const stmt = this.db.prepare(`
-          INSERT INTO api_keys (id, key, name, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context)
-          VALUES (@id, @key, @name, @created_at, @last_used_at, @is_active, @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute, @smart_context)
+          INSERT INTO api_keys (id, key, name, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context, smart_context_limit, allowed_models, description, cors_origin)
+          VALUES (@id, @key, @name, @created_at, @last_used_at, @is_active, @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute, @smart_context, @smart_context_limit, @allowed_models, @description, @cors_origin)
         `);
           for (const row of payload.api_keys) stmt.run(row);
         }
