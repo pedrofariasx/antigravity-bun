@@ -444,11 +444,27 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   resetDatabase() {
     this.logger.warn('Resetting database tables...');
-    this.db.exec('DROP TABLE IF EXISTS request_logs');
-    this.db.exec('DROP TABLE IF EXISTS api_keys');
-    this.db.exec('DROP TABLE IF EXISTS accounts');
-    this.db.exec('DROP TABLE IF EXISTS sessions');
-    this.initTables();
+    // Delete data but keep tables structure to avoid recreating them constantly
+    // and preserve sessions if possible (optional, but good UX)
+
+    // We actually want to clear data, not drop tables necessarily.
+    // But dropping ensures clean slate for IDs autoincrement reset usually.
+    // However, to keep the current session alive, we should spare the 'sessions' table
+    // or specifically preserve the current session.
+    // For simplicity and "Reset" semantic, let's truncate data.
+
+    this.db.exec('DELETE FROM request_logs');
+    this.db.exec('DELETE FROM api_keys');
+    this.db.exec('DELETE FROM accounts');
+
+    // Reset sequence for autoincrement
+    this.db.exec(
+      "DELETE FROM sqlite_sequence WHERE name IN ('api_keys', 'request_logs')",
+    );
+
+    // We do NOT delete sessions so the admin stays logged in
+    // this.db.exec('DELETE FROM sessions');
+
     return { success: true };
   }
 
@@ -471,36 +487,91 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   importData(data: Record<string, any[]>) {
     const transaction = this.db.transaction(
       (payload: Record<string, any[]>) => {
-        // Clear existing data (optional, but safer for a full import)
+        // Clear existing data (but keep sessions)
         this.db.prepare('DELETE FROM accounts').run();
         this.db.prepare('DELETE FROM api_keys').run();
-        // We keep request logs or clear them? User might want to keep history,
-        // but typically import/export is for settings. Let's include logs if present.
-        if (payload.request_logs)
+
+        if (payload.request_logs && payload.request_logs.length > 0) {
           this.db.prepare('DELETE FROM request_logs').run();
-
-        if (payload.accounts) {
-          const stmt = this.db.prepare(`
-          INSERT INTO accounts (id, email, access_token, refresh_token, expiry_date, project_id, status, last_used_at, request_count, error_count, created_at)
-          VALUES (@id, @email, @access_token, @refresh_token, @expiry_date, @project_id, @status, @last_used_at, @request_count, @error_count, @created_at)
-        `);
-          for (const row of payload.accounts) stmt.run(row);
         }
 
-        if (payload.api_keys) {
-          const stmt = this.db.prepare(`
-          INSERT INTO api_keys (id, key, name, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context, smart_context_limit, allowed_models, description, cors_origin)
-          VALUES (@id, @key, @name, @created_at, @last_used_at, @is_active, @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute, @smart_context, @smart_context_limit, @allowed_models, @description, @cors_origin)
-        `);
-          for (const row of payload.api_keys) stmt.run(row);
+        if (payload.accounts && payload.accounts.length > 0) {
+          const insertAccount = this.db.prepare(`
+            INSERT INTO accounts (
+              id, email, access_token, refresh_token, expiry_date, project_id,
+              status, last_used_at, request_count, error_count, created_at
+            )
+            VALUES (
+              @id, @email, @access_token, @refresh_token, @expiry_date, @project_id,
+              @status, @last_used_at, @request_count, @error_count, @created_at
+            )
+          `);
+
+          for (const row of payload.accounts) {
+            // Ensure optional fields are present or null
+            const safeRow = {
+              ...row,
+              project_id: row.project_id || null,
+              last_used_at: row.last_used_at || null,
+              request_count: row.request_count || 0,
+              error_count: row.error_count || 0,
+              status: row.status || 'ready',
+              created_at: row.created_at || new Date().toISOString(),
+            };
+            insertAccount.run(safeRow);
+          }
         }
 
-        if (payload.request_logs) {
-          const stmt = this.db.prepare(`
-          INSERT INTO request_logs (id, api_key_id, model, tokens_input, tokens_output, latency_ms, status, error_message, created_at)
-          VALUES (@id, @api_key_id, @model, @tokens_input, @tokens_output, @latency_ms, @status, @error_message, @created_at)
-        `);
-          for (const row of payload.request_logs) stmt.run(row);
+        if (payload.api_keys && payload.api_keys.length > 0) {
+          const insertKey = this.db.prepare(`
+            INSERT INTO api_keys (
+              id, key, name, created_at, last_used_at, is_active,
+              requests_count, tokens_used, daily_limit, rate_limit_per_minute,
+              smart_context, smart_context_limit, allowed_models, description, cors_origin
+            )
+            VALUES (
+              @id, @key, @name, @created_at, @last_used_at, @is_active,
+              @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute,
+              @smart_context, @smart_context_limit, @allowed_models, @description, @cors_origin
+            )
+          `);
+
+          for (const row of payload.api_keys) {
+            const safeRow = {
+              ...row,
+              last_used_at: row.last_used_at || null,
+              requests_count: row.requests_count || 0,
+              tokens_used: row.tokens_used || 0,
+              daily_limit: row.daily_limit || 0,
+              rate_limit_per_minute: row.rate_limit_per_minute || 60,
+              smart_context: row.smart_context || 0,
+              smart_context_limit: row.smart_context_limit || 10,
+              allowed_models: row.allowed_models || '*',
+              description: row.description || null,
+              cors_origin: row.cors_origin || '*',
+            };
+            insertKey.run(safeRow);
+          }
+        }
+
+        if (payload.request_logs && payload.request_logs.length > 0) {
+          const insertLog = this.db.prepare(`
+            INSERT INTO request_logs (
+              id, api_key_id, model, tokens_input, tokens_output,
+              latency_ms, status, error_message, created_at
+            )
+            VALUES (
+              @id, @api_key_id, @model, @tokens_input, @tokens_output,
+              @latency_ms, @status, @error_message, @created_at
+            )
+          `);
+
+          for (const row of payload.request_logs) {
+            insertLog.run({
+              ...row,
+              error_message: row.error_message || null,
+            });
+          }
         }
       },
     );
