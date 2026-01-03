@@ -13,6 +13,7 @@ export interface ApiKey {
   tokens_used: number;
   daily_limit: number;
   rate_limit_per_minute: number;
+  smart_context: number;
 }
 
 @Injectable()
@@ -28,6 +29,7 @@ export class ApiKeysService {
     name: string,
     dailyLimit = 0,
     rateLimitPerMinute = 60,
+    smartContext = 0,
   ): { key: string; id: number } {
     const rawKey = this.authService.generateApiKey();
 
@@ -36,6 +38,7 @@ export class ApiKeysService {
       rawKey, // Store the key directly for simplicity
       dailyLimit,
       rateLimitPerMinute,
+      smartContext,
     );
 
     this.logger.log(`Created new API key: ${name}`);
@@ -87,6 +90,17 @@ export class ApiKeysService {
   deleteApiKey(keyId: number): boolean {
     const result = this.databaseService.deleteApiKey(keyId);
     this.logger.log(`Deleted API key ID: ${keyId}`);
+    return result.changes > 0;
+  }
+
+  toggleSmartContext(keyId: number, enabled: boolean): boolean {
+    const result = this.databaseService.updateApiKeySmartContext(
+      keyId,
+      enabled ? 1 : 0,
+    );
+    this.logger.log(
+      `Smart Context ${enabled ? 'enabled' : 'disabled'} for API key ID: ${keyId}`,
+    );
     return result.changes > 0;
   }
 

@@ -238,6 +238,15 @@ export class AntigravityService {
         async (accountState) => {
           const projectId =
             await this.accountsService.getProjectId(accountState);
+
+          // Apply Smart Context if enabled
+          if (apiKeyData?.smart_context === 1) {
+            dto.messages = this.transformerService.pruneMessages(dto.messages);
+            this.logger.debug(
+              `Smart Context active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
+            );
+          }
+
           const antigravityRequest = this.transformerService.transformRequest(
             dto,
             projectId,
@@ -312,6 +321,15 @@ export class AntigravityService {
     await this.withAccountRetry(
       async (accountState) => {
         const projectId = await this.accountsService.getProjectId(accountState);
+
+        // Apply Smart Context if enabled
+        if (apiKeyData?.smart_context === 1) {
+          dto.messages = this.transformerService.pruneMessages(dto.messages);
+          this.logger.debug(
+            `Smart Context (Stream) active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
+          );
+        }
+
         const antigravityRequest = this.transformerService.transformRequest(
           dto,
           projectId,
@@ -464,6 +482,15 @@ export class AntigravityService {
         async (accountState) => {
           const projectId =
             await this.accountsService.getProjectId(accountState);
+
+          // Apply Smart Context if enabled
+          if (apiKeyData?.smart_context === 1) {
+            dto.messages = this.transformerService.pruneMessages(dto.messages);
+            this.logger.debug(
+              `Smart Context (Anthropic) active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
+            );
+          }
+
           const antigravityRequest =
             this.anthropicTransformerService.transformRequest(dto, projectId);
 
@@ -538,6 +565,15 @@ export class AntigravityService {
     await this.withAccountRetry(
       async (accountState) => {
         const projectId = await this.accountsService.getProjectId(accountState);
+
+        // Apply Smart Context if enabled
+        if (apiKeyData?.smart_context === 1) {
+          dto.messages = this.transformerService.pruneMessages(dto.messages);
+          this.logger.debug(
+            `Smart Context (Anthropic Stream) active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
+          );
+        }
+
         const antigravityRequest =
           this.anthropicTransformerService.transformRequest(dto, projectId);
 

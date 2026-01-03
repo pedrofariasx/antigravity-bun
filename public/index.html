@@ -971,6 +971,27 @@ for await (const chunk of stream) {
             <label for="rate-limit">Rate Limit (requests/minute)</label>
             <input type="number" id="rate-limit" value="60" min="1" />
           </div>
+          <div
+            class="form-group"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              margin-top: 10px;
+            "
+          >
+            <input
+              type="checkbox"
+              id="smart-context"
+              style="width: 20px; height: 20px; cursor: pointer"
+            />
+            <label
+              for="smart-context"
+              style="margin-bottom: 0; cursor: pointer"
+            >
+              🧠 Smart Context (Auto-reduce tokens)
+            </label>
+          </div>
           <div class="modal-actions">
             <button
               type="button"

@@ -347,6 +347,9 @@ function updateKeysUI() {
                                 ? `<button onclick="deactivateKey(${key.id})" class="btn-icon" title="Deactivate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 11-12.73 0M12 2v10"/></svg></button>`
                                 : `<button onclick="activateKey(${key.id})" class="btn-icon" title="Activate" style="color: var(--accent-green);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5L20 7"/></svg></button>`
                             }
+                            <button onclick="toggleSmartContext(${key.id}, ${key.smart_context === 1 ? 'false' : 'true'})" class="btn-icon" title="${key.smart_context === 1 ? 'Disable Smart Context' : 'Enable Smart Context'}" style="color: ${key.smart_context === 1 ? 'var(--accent-blue)' : 'var(--text-dim)'};">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10A10 10 0 0012 2zm0 18a8 8 0 118-8 8 8 0 01-8 8z"/><path d="M12 6a6 6 0 106 6 6 6 0 00-6-6z"/></svg>
+                            </button>
                             <button onclick="deleteKey(${key.id})" class="btn-icon" title="Delete" style="color: var(--accent-red);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                         </div>
                     </div>
@@ -354,6 +357,11 @@ function updateKeysUI() {
                         <span class="status-badge ${key.is_active ? 'status-ready' : 'status-error'}">
                             ${key.is_active ? 'ACTIVE' : 'INACTIVE'}
                         </span>
+                        ${
+                          key.smart_context === 1
+                            ? `<span class="status-badge" style="background: var(--accent-blue-dim); color: var(--accent-blue); border: 1px solid var(--accent-blue);">🧠 SMART</span>`
+                            : ''
+                        }
                         <span class="text-dim" style="font-size: 0.75rem;">Created: ${new Date(key.created_at).toLocaleDateString()}</span>
                     </div>
                     <div class="key-stats-row">
@@ -391,6 +399,9 @@ if (createKeyForm) {
     const name = document.getElementById('key-name').value;
     const dailyLimit = parseInt(document.getElementById('daily-limit').value);
     const rateLimit = parseInt(document.getElementById('rate-limit').value);
+    const smartContext = document.getElementById('smart-context').checked
+      ? 1
+      : 0;
 
     try {
       const response = await fetch('/api/keys', {
@@ -400,6 +411,7 @@ if (createKeyForm) {
           name,
           dailyLimit,
           rateLimitPerMinute: rateLimit,
+          smartContext,
         }),
       });
 
@@ -473,6 +485,24 @@ window.deleteKey = async function (id) {
     showToast('Key deleted');
   } catch (error) {
     showToast('Failed to delete key', 'error');
+  }
+};
+
+window.toggleSmartContext = async function (id, enabled) {
+  try {
+    const res = await fetch(`/api/keys/${id}/smart-context`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    if (res.ok) {
+      fetchApiKeys();
+      showToast(`Smart Context ${enabled ? 'enabled' : 'disabled'}`);
+    } else {
+      showToast('Failed to update Smart Context', 'error');
+    }
+  } catch (error) {
+    showToast('Network error', 'error');
   }
 };
 

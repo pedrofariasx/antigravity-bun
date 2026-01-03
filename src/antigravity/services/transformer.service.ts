@@ -51,6 +51,21 @@ export interface StreamAccumulator {
 
 @Injectable()
 export class TransformerService {
+  pruneMessages(messages: any[], limit = 10): any[] {
+    if (messages.length <= limit) return messages;
+
+    const systemMessages = messages.filter((m) => m.role === 'system');
+    const otherMessages = messages.filter((m) => m.role !== 'system');
+
+    if (otherMessages.length <= limit) return messages;
+
+    // Keep only the last 'limit' messages
+    const recentMessages = otherMessages.slice(-limit);
+
+    // Merge back system messages at the beginning
+    return [...systemMessages, ...recentMessages];
+  }
+
   transformRequest(
     dto: ChatCompletionRequestDto,
     projectId: string,

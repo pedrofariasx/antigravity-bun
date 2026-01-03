@@ -55,7 +55,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         requests_count INTEGER DEFAULT 0,
         tokens_used INTEGER DEFAULT 0,
         daily_limit INTEGER DEFAULT 0,
-        rate_limit_per_minute INTEGER DEFAULT 60
+        rate_limit_per_minute INTEGER DEFAULT 60,
+        smart_context INTEGER DEFAULT 0
       )
     `);
 
@@ -65,6 +66,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       { name: 'tokens_used', type: 'INTEGER DEFAULT 0' },
       { name: 'daily_limit', type: 'INTEGER DEFAULT 0' },
       { name: 'rate_limit_per_minute', type: 'INTEGER DEFAULT 60' },
+      { name: 'smart_context', type: 'INTEGER DEFAULT 0' },
     ];
 
     for (const col of migrationColumns) {
@@ -82,8 +84,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         requests_count = COALESCE(requests_count, 0),
         tokens_used = COALESCE(tokens_used, 0),
         daily_limit = COALESCE(daily_limit, 0),
-        rate_limit_per_minute = COALESCE(rate_limit_per_minute, 60)
-      WHERE requests_count IS NULL OR tokens_used IS NULL OR daily_limit IS NULL OR rate_limit_per_minute IS NULL
+        rate_limit_per_minute = COALESCE(rate_limit_per_minute, 60),
+        smart_context = COALESCE(smart_context, 0)
+      WHERE requests_count IS NULL OR tokens_used IS NULL OR daily_limit IS NULL OR rate_limit_per_minute IS NULL OR smart_context IS NULL
     `);
 
     // Request logs table
@@ -150,12 +153,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     key: string,
     dailyLimit = 0,
     rateLimitPerMinute = 60,
+    smartContext = 0,
   ) {
     const stmt = this.db.prepare(`
-      INSERT INTO api_keys (key, name, daily_limit, rate_limit_per_minute)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO api_keys (key, name, daily_limit, rate_limit_per_minute, smart_context)
+      VALUES (?, ?, ?, ?, ?)
     `);
-    return stmt.run(key, name, dailyLimit, rateLimitPerMinute);
+    return stmt.run(key, name, dailyLimit, rateLimitPerMinute, smartContext);
   }
 
   getApiKeyByKey(key: string) {
@@ -167,7 +171,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
   getAllApiKeys() {
     const stmt = this.db.prepare(
-      'SELECT id, name, key, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute FROM api_keys ORDER BY created_at DESC',
+      'SELECT id, name, key, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context FROM api_keys ORDER BY created_at DESC',
     );
     return stmt.all();
   }
@@ -200,6 +204,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   deleteApiKey(keyId: number) {
     const stmt = this.db.prepare('DELETE FROM api_keys WHERE id = ?');
     return stmt.run(keyId);
+  }
+
+  updateApiKeySmartContext(keyId: number, enabled: number) {
+    const stmt = this.db.prepare(
+      'UPDATE api_keys SET smart_context = ? WHERE id = ?',
+    );
+    return stmt.run(enabled, keyId);
   }
 
   // Request logs methods
@@ -383,8 +394,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
         if (payload.api_keys) {
           const stmt = this.db.prepare(`
-          INSERT INTO api_keys (id, key, name, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute)
-          VALUES (@id, @key, @name, @created_at, @last_used_at, @is_active, @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute)
+          INSERT INTO api_keys (id, key, name, created_at, last_used_at, is_active, requests_count, tokens_used, daily_limit, rate_limit_per_minute, smart_context)
+          VALUES (@id, @key, @name, @created_at, @last_used_at, @is_active, @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute, @smart_context)
         `);
           for (const row of payload.api_keys) stmt.run(row);
         }
