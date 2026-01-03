@@ -1,8 +1,8 @@
-# 🚀 Antigravity
+# 🚀 Antigravity API
 
 > **⚠️ Aviso**: Este projeto utiliza a API interna do Google. Use por sua conta e risco.
 
-**Antigravity** é um proxy compatível com as APIs da OpenAI e Anthropic, que utiliza a API do Google Gemini (Antigravity) como backend. Ele permite usar modelos como Claude e GPT através de contas Google gratuitas.
+**Antigravity API** é um proxy compatível com as APIs da OpenAI e Anthropic, que utiliza a API do Google Gemini (Antigravity) como backend. Ele permite usar modelos como Claude e GPT através de contas Google gratuitas.
 
 ## 📋 Índice
 
