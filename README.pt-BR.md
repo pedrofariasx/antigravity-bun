@@ -154,10 +154,9 @@ curl http://localhost:3000/v1/chat/completions \
   -d '{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "Olá!"}]}'
 ```
 
-### Modo Aberto vs Protegido
+### Modo Protegido
 
-- **Sem Chaves de API criadas**: A API fica aberta (qualquer um pode usar).
-- **Com Chaves de API criadas**: Apenas requisições autenticadas são aceitas.
+Por padrão, a API exige uma Chave de API válida para todas as requisições. Você deve criar pelo menos uma chave no dashboard para usar os endpoints do proxy.
 
 ---
 

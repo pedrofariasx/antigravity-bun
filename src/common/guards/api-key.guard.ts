@@ -18,10 +18,15 @@ export class ApiKeyGuard implements CanActivate {
     const isAnthropicEndpoint = request.path === '/v1/messages';
 
     // If no API keys in DB, allow all requests (open mode)
+    // REMOVED: This caused confusion after database reset.
+    // Now the system is secure by default - if no keys exist, no access is allowed.
+    // User must create a key in the dashboard.
     const dbKeysCount = this.apiKeysService.getAllApiKeys().length;
+    /*
     if (dbKeysCount === 0) {
       return true;
     }
+    */
 
     let token = '';
     try {
@@ -30,9 +35,11 @@ export class ApiKeyGuard implements CanActivate {
         : this.extractOpenAIKey(request);
     } catch (e) {
       // If we failed to extract but there's no protection, let it pass
+      /*
       if (dbKeysCount === 0) {
         return true;
       }
+      */
       throw e;
     }
 
