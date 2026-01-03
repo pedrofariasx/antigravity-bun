@@ -89,6 +89,8 @@ export class AppController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
     const result = this.databaseService.resetDatabase();
+    // Force reload accounts cache to match database state
+    this.accountsService.reloadAccounts();
     return res.json(result);
   }
 
