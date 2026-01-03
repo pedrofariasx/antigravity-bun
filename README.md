@@ -1,4 +1,4 @@
-# 🚀 Antigravity
+# 🚀 Antigravity API
 
 > **⚠️ Warning**: This project uses internal Google APIs. Use at your own risk.
 
@@ -55,7 +55,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/antigravity.git
+git clone https://github.com/pedrofariasx/antigravity.git
 cd antigravity
 
 # Install dependencies
