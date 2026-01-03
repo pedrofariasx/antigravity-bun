@@ -499,8 +499,7 @@ function setupCreateKeyForm() {
   });
 }
 
-// Call setup immediately and also on DOMContentLoaded as fallback
-setupCreateKeyForm();
+// setupCreateKeyForm will be called on DOMContentLoaded
 
 window.showEditKeyModal = function (id) {
   const key = apiKeys.find((k) => k.id === id);
@@ -640,8 +639,7 @@ function setupEditKeyForm() {
   });
 }
 
-// Call setup immediately and also on DOMContentLoaded as fallback
-setupEditKeyForm();
+// setupEditKeyForm will be called on DOMContentLoaded
 
 function showNewKeyModal(key) {
   const valEl = document.getElementById('new-key-value');
