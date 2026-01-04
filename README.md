@@ -1,7 +1,6 @@
 # 🚀 Antigravity API
 
-<img width="1919" height="1025" alt="image" src="https://github.com/user-attachments/assets/11fb87c8-fecc-4908-a896-ab78140e6b9b" />
-
+<img width="1446" height="1024" alt="image" src="https://github.com/user-attachments/assets/3ba44d49-1f04-4050-8873-8ac9c202f57e" />
 
 > **⚠️ Warning**: This project uses internal Google APIs. Use at your own risk.
 
