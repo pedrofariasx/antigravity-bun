@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import {
@@ -17,6 +17,8 @@ import {
   QUOTA_GROUPS,
   GROUP_DISPLAY_NAMES,
 } from '../antigravity/constants';
+import { EventsService } from '../events/events.service';
+import { AccountsService } from '../accounts/accounts.service';
 
 @Injectable()
 export class QuotaService {
@@ -24,7 +26,12 @@ export class QuotaService {
   private readonly quotaCache = new Map<string, Map<string, QuotaCacheEntry>>();
   private readonly quotaThreshold: number;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly eventsService: EventsService,
+    @Inject(forwardRef(() => AccountsService))
+    private readonly accountsService: AccountsService,
+  ) {
     this.quotaThreshold = this.configService.get<number>(
       'QUOTA_THRESHOLD',
       0.01,
@@ -120,6 +127,26 @@ export class QuotaService {
     const flashQuota = accountCache.get('gemini-3-flash');
     if (flashQuota) {
       accountCache.set('gemini-3-pro-flash-preview', { ...flashQuota });
+    }
+
+    // Emit real-time update to dashboard
+    this.emitQuotaUpdate();
+  }
+
+  private emitQuotaUpdate(): void {
+    try {
+      const status = this.accountsService.getStatus();
+      const quotaAccounts = this.accountsService.getAccountsForQuotaStatus();
+      const quotaStatus = this.getQuotaStatus(quotaAccounts);
+
+      this.eventsService.emitDashboardUpdate({
+        status,
+        quotaStatus,
+      });
+
+      this.logger.debug('Emitted quota update via WebSocket');
+    } catch (error) {
+      this.logger.error('Failed to emit quota update:', error);
     }
   }
 

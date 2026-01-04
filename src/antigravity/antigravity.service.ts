@@ -28,6 +28,7 @@ import { SSEStreamParser } from '../common/utils';
 import { QuotaStatusResponse } from '../quota/interfaces';
 import { ApiKeysService } from '../api-keys/api-keys.service';
 import { AntigravityClientService } from './services/antigravity-client.service';
+import { EventsService } from '../events/events.service';
 
 type ApiType = 'openai' | 'anthropic';
 
@@ -45,6 +46,7 @@ export class AntigravityService {
     private readonly configService: ConfigService,
     private readonly apiKeysService: ApiKeysService,
     private readonly antigravityClient: AntigravityClientService,
+    private readonly eventsService: EventsService,
   ) {
     this.maxRetryAccounts =
       this.configService.get<number>('accounts.maxRetryAccounts') || 3;
@@ -290,14 +292,26 @@ export class AntigravityService {
         this.apiKeysService.updateUsage(apiKeyData.id, tokens);
       }
 
+      const promptTokens = response.usage?.prompt_tokens || 0;
+      const completionTokens = response.usage?.completion_tokens || 0;
+
       this.apiKeysService.logRequest(
         apiKeyData?.id || null,
         dto.model,
-        response.usage?.prompt_tokens || 0,
-        response.usage?.completion_tokens || 0,
+        promptTokens,
+        completionTokens,
         latency,
         'success',
       );
+
+      // Notify real-time analytics
+      this.eventsService.emitAnalyticsNewRequest({
+        model: dto.model,
+        tokens: promptTokens + completionTokens,
+        latency,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+      });
 
       return response;
     } catch (error) {
@@ -311,6 +325,15 @@ export class AntigravityService {
         'error',
         error.message,
       );
+
+      // Notify real-time analytics for errors
+      this.eventsService.emitAnalyticsNewRequest({
+        model: dto.model,
+        tokens: 0,
+        latency,
+        status: 'error',
+        timestamp: new Date().toISOString(),
+      });
       throw error;
     }
   }
@@ -408,6 +431,15 @@ export class AntigravityService {
           latency,
           'success',
         );
+
+        // Notify real-time analytics
+        this.eventsService.emitAnalyticsNewRequest({
+          model: dto.model,
+          tokens: totalTokens,
+          latency,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+        });
       },
       'openai',
       res,
@@ -424,6 +456,15 @@ export class AntigravityService {
         'error',
         error.message,
       );
+
+      // Notify real-time analytics for errors
+      this.eventsService.emitAnalyticsNewRequest({
+        model: dto.model,
+        tokens: 0,
+        latency,
+        status: 'error',
+        timestamp: new Date().toISOString(),
+      });
       if (!res.headersSent) {
         throw error;
       }
@@ -543,6 +584,15 @@ export class AntigravityService {
         'success',
       );
 
+      // Notify real-time analytics
+      this.eventsService.emitAnalyticsNewRequest({
+        model: dto.model,
+        tokens: totalTokens,
+        latency,
+        status: 'success',
+        timestamp: new Date().toISOString(),
+      });
+
       return response;
     } catch (error) {
       const latency = Date.now() - startTime;
@@ -555,6 +605,15 @@ export class AntigravityService {
         'error',
         error.message,
       );
+
+      // Notify real-time analytics for errors
+      this.eventsService.emitAnalyticsNewRequest({
+        model: dto.model,
+        tokens: 0,
+        latency,
+        status: 'error',
+        timestamp: new Date().toISOString(),
+      });
       throw error;
     }
   }
@@ -662,6 +721,15 @@ export class AntigravityService {
           latency,
           'success',
         );
+
+        // Notify real-time analytics
+        this.eventsService.emitAnalyticsNewRequest({
+          model: dto.model,
+          tokens: totalTokens,
+          latency,
+          status: 'success',
+          timestamp: new Date().toISOString(),
+        });
       },
       'anthropic',
       res,

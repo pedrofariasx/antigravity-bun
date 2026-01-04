@@ -10,6 +10,7 @@ let apiKeys = [];
 let isLoading = true;
 let usageChart = null;
 let latencyChart = null;
+let socket = null;
 
 window.showManualAccountModal = function () {
   document.getElementById('manual-account-modal').style.display = 'flex';
@@ -738,6 +739,7 @@ window.logout = async function () {
 // ==========================================
 
 function animateValue(element, start, end, duration = 500) {
+  if (!element) return;
   const startTime = performance.now();
   const update = (currentTime) => {
     const elapsed = currentTime - startTime;
@@ -752,12 +754,19 @@ function animateValue(element, start, end, duration = 500) {
   requestAnimationFrame(update);
 }
 
-function initCharts() {
+function initCharts(analyticsData) {
+  const usageCategories =
+    analyticsData?.usage?.categories ||
+    Array(24)
+      .fill(0)
+      .map((_, i) => `${i.toString().padStart(2, '0')}:00`);
+  const usageSeries = analyticsData?.usage?.data || Array(24).fill(0);
+
   const usageOptions = {
     series: [
       {
         name: 'Tokens',
-        data: [0, 0, 0, 0, 0, 0, 0],
+        data: usageSeries,
       },
     ],
     chart: {
@@ -765,6 +774,19 @@ function initCharts() {
       type: 'area',
       toolbar: { show: false },
       background: 'transparent',
+      animations: {
+        enabled: true,
+        easing: 'easeinout',
+        speed: 800,
+        animateGradually: {
+          enabled: true,
+          delay: 150,
+        },
+        dynamicAnimation: {
+          enabled: true,
+          speed: 350,
+        },
+      },
     },
     theme: { mode: 'dark' },
     colors: ['#6366f1'],
@@ -780,31 +802,46 @@ function initCharts() {
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 2 },
     xaxis: {
-      categories: [
-        '00:00',
-        '04:00',
-        '08:00',
-        '12:00',
-        '16:00',
-        '20:00',
-        '23:59',
-      ],
+      categories: usageCategories,
       axisBorder: { show: false },
       axisTicks: { show: false },
+      labels: {
+        show: true,
+        rotate: -45,
+        style: { fontSize: '10px' },
+      },
+    },
+    yaxis: {
+      labels: {
+        formatter: (val) => (val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val),
+      },
     },
     grid: { borderColor: 'rgba(255,255,255,0.05)' },
+    tooltip: {
+      theme: 'dark',
+      x: { show: true },
+    },
   };
 
+  const latencyLabels = analyticsData?.latency?.labels || [];
+  const latencySeries = analyticsData?.latency?.data || [];
+  const avgLatency =
+    latencySeries.length > 0
+      ? Math.round(
+          latencySeries.reduce((a, b) => a + b, 0) / latencySeries.length,
+        )
+      : 0;
+
   const latencyOptions = {
-    series: [400, 300, 500],
+    series: latencySeries,
     chart: {
       type: 'donut',
       height: 350,
       background: 'transparent',
     },
-    labels: ['Gemini', 'Claude', 'GPT'],
+    labels: latencyLabels,
     theme: { mode: 'dark' },
-    colors: ['#6366f1', '#fb923c', '#34d399'],
+    colors: ['#6366f1', '#fb923c', '#34d399', '#f43f5e', '#8b5cf6', '#06b6d4'],
     legend: { position: 'bottom' },
     dataLabels: { enabled: false },
     plotOptions: {
@@ -816,7 +853,7 @@ function initCharts() {
             total: {
               show: true,
               label: 'Avg Latency',
-              formatter: () => '450ms',
+              formatter: () => `${avgLatency}ms`,
             },
           },
         },
@@ -830,6 +867,11 @@ function initCharts() {
       usageOptions,
     );
     usageChart.render();
+  } else if (analyticsData) {
+    usageChart.updateOptions({
+      xaxis: { categories: usageCategories },
+    });
+    usageChart.updateSeries([{ data: usageSeries }]);
   }
 
   if (!latencyChart) {
@@ -838,14 +880,41 @@ function initCharts() {
       latencyOptions,
     );
     latencyChart.render();
+  } else if (analyticsData) {
+    latencyChart.updateOptions({
+      labels: latencyLabels,
+      plotOptions: {
+        pie: {
+          donut: {
+            labels: {
+              total: {
+                formatter: () => `${avgLatency}ms`,
+              },
+            },
+          },
+        },
+      },
+    });
+    latencyChart.updateSeries(latencySeries);
   }
 }
 
 function updateUI(analyticsData) {
   if (!currentStatus) return;
 
-  // Initialize charts on first load
+  // Initialize/Update charts
   initCharts(analyticsData);
+
+  // Update System Status dot
+  const statusDot = document.querySelector('.status-dot');
+  const statusText = document.querySelector('.status-text');
+  if (currentStatus.readyAccounts > 0) {
+    if (statusDot) statusDot.style.background = 'var(--accent-green)';
+    if (statusText) statusText.textContent = 'Operational';
+  } else {
+    if (statusDot) statusDot.style.background = 'var(--accent-red)';
+    if (statusText) statusText.textContent = 'Degraded';
+  }
 
   // Animate Stats
   const statsMapping = {
@@ -1314,6 +1383,69 @@ window.copyToClipboard = function (text) {
 };
 
 // ==========================================
+// ==========================================
+// REAL-TIME UPDATES (WebSockets)
+// ==========================================
+
+function initRealtime() {
+  if (typeof io === 'undefined') {
+    console.warn('Socket.io not loaded. Real-time updates disabled.');
+    return;
+  }
+
+  socket = io();
+
+  socket.on('connect', () => {
+    console.log('Connected to real-time events');
+    const statusDot = document.querySelector('.status-dot');
+    if (statusDot) statusDot.classList.add('pulse');
+  });
+
+  socket.on('disconnect', () => {
+    console.warn('Disconnected from real-time events');
+    const statusDot = document.querySelector('.status-dot');
+    if (statusDot) statusDot.classList.remove('pulse');
+  });
+
+  socket.on('dashboard.update', (data) => {
+    console.log('Real-time dashboard update received');
+    currentStatus = data.status;
+    currentQuotaStatus = data.quotaStatus;
+    updateUI();
+  });
+
+  socket.on('analytics.newRequest', async (data) => {
+    console.log('Real-time analytics event:', data);
+    // Fetch fresh analytics data to keep charts accurate
+    try {
+      const res = await fetch('/api/keys/stats/analytics');
+      if (res.ok) {
+        const analyticsData = await res.json();
+        initCharts(analyticsData);
+      }
+
+      // Also update the summary stats if we're on dashboard
+      const resStats = await fetch('/api/dashboard');
+      if (resStats.ok) {
+        const dashboardData = await resStats.json();
+        currentStatus = dashboardData.status;
+        currentQuotaStatus = dashboardData.quotaStatus;
+        updateUI(); // This will also call initCharts but we already did it
+      }
+    } catch (e) {
+      console.error('Failed to update analytics real-time', e);
+    }
+  });
+
+  socket.on('account.statusChange', (data) => {
+    showToast(
+      `Account ${data.email} is now ${data.status}`,
+      data.status === 'ready' ? 'success' : 'warning',
+    );
+  });
+}
+
+// ==========================================
 // INITIALIZATION
 // ==========================================
 
@@ -1324,12 +1456,20 @@ document.addEventListener('DOMContentLoaded', () => {
   // Create toast container
   createToastContainer();
 
-  // Add fadeOut animation
+  // Add pulse animation for status dot
   const style = document.createElement('style');
   style.textContent = `
       @keyframes fadeOut {
           from { opacity: 1; transform: translateX(0); }
           to { opacity: 0; transform: translateX(20px); }
+      }
+      @keyframes pulse-green {
+        0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+      }
+      .status-dot.pulse {
+        animation: pulse-green 2s infinite;
       }
   `;
   document.head.appendChild(style);
@@ -1341,12 +1481,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fetch initial data
   fetchData();
 
-  // Auto-refresh every 60 seconds
+  // Initialize Real-time
+  initRealtime();
+
+  // Polling fallback (increased to 5 mins as we have real-time now)
   setInterval(() => {
-    if (!document.hidden) {
+    if (!document.hidden && (!socket || !socket.connected)) {
       fetchData();
     }
-  }, 60000);
+  }, 300000);
 });
 
 // Refresh when tab becomes visible

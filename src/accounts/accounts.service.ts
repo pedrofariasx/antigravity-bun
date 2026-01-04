@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { QuotaService } from '../quota/quota.service';
 import { DatabaseService } from '../database/database.service';
+import { EventsService } from '../events/events.service';
 import {
   AccountCredential,
   AccountState,
@@ -54,6 +55,7 @@ export class AccountsService implements OnModuleInit {
     @Inject(forwardRef(() => QuotaService))
     private readonly quotaService: QuotaService,
     private readonly databaseService: DatabaseService,
+    private readonly eventsService: EventsService,
   ) {
     this.COOLDOWN_DURATION_MS =
       this.configService.get<number>('accounts.cooldownDurationMs') || 60000;
@@ -259,6 +261,7 @@ export class AccountsService implements OnModuleInit {
       this.logger.warn(
         `Account ${accountId} marked as cooldown until ${new Date(state.cooldownUntil).toISOString()}`,
       );
+      this.eventsService.emitDashboardUpdate(this.getStatus());
     }
   }
 
@@ -271,6 +274,7 @@ export class AccountsService implements OnModuleInit {
       this.logger.error(
         `Account ${accountId} (${state.credential.email}) marked as error`,
       );
+      this.eventsService.emitDashboardUpdate(this.getStatus());
     }
   }
 
@@ -286,6 +290,7 @@ export class AccountsService implements OnModuleInit {
       }
       this.databaseService.updateAccountStatus(accountId, 'ready');
       this.databaseService.incrementAccountUsage(accountId, false);
+      this.eventsService.emitDashboardUpdate(this.getStatus());
     }
   }
 

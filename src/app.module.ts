@@ -12,6 +12,7 @@ import { OAuthModule } from './oauth/oauth.module';
 import { QuotaModule } from './quota/quota.module';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './auth/auth.module';
+import { EventsModule } from './events/events.module';
 import { ApiKeysModule } from './api-keys/api-keys.module';
 import configuration from './config/configuration';
 
@@ -35,6 +36,7 @@ import configuration from './config/configuration';
     AntigravityModule,
     OAuthModule,
     QuotaModule,
+    EventsModule,
   ],
   controllers: [AppController],
   providers: [
