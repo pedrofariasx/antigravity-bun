@@ -27,18 +27,18 @@ describe('DatabaseService', () => {
   it('should reset database without clearing sessions', () => {
     // Setup initial state
     service.createSession('test-session', new Date(Date.now() + 10000));
-    service.createApiKey('Test Key', 'ag-test', 100);
+    service.createApiKey('Test Key', 'ag-test-hash', 100);
 
     // Verify setup
     expect(service.getSession('test-session')).toBeDefined();
-    expect(service.getApiKeyByKey('ag-test')).toBeDefined();
+    expect(service.getApiKeyByHash('ag-test-hash')).toBeDefined();
 
     // Reset
     service.resetDatabase();
 
     // Verify after reset
     expect(service.getSession('test-session')).toBeDefined(); // Should still exist
-    expect(service.getApiKeyByKey('ag-test')).toBeUndefined(); // Should be gone
+    expect(service.getApiKeyByHash('ag-test-hash')).toBeUndefined(); // Should be gone
   });
 
   it('should import data correctly', () => {
@@ -48,7 +48,7 @@ describe('DatabaseService', () => {
       api_keys: [
         {
           id: 1,
-          key: 'ag-imported',
+          key: 'ag-imported-hash',
           name: 'Imported Key',
           created_at: new Date().toISOString(),
           is_active: 1,
@@ -66,7 +66,7 @@ describe('DatabaseService', () => {
 
     service.importData(backupData);
 
-    const key = service.getApiKeyByKey('ag-imported');
+    const key = service.getApiKeyByHash('ag-imported-hash');
     expect(key).toBeDefined();
     // Use type assertion or access property directly since return type is inferred as unknown by TS in test context sometimes
     expect((key as any).name).toBe('Imported Key');

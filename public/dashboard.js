@@ -8,6 +8,8 @@ let currentQuotaStatus = null;
 let availableModels = [];
 let apiKeys = [];
 let isLoading = true;
+let usageChart = null;
+let latencyChart = null;
 
 window.showManualAccountModal = function () {
   document.getElementById('manual-account-modal').style.display = 'flex';
@@ -748,8 +750,100 @@ function animateValue(element, start, end, duration = 500) {
   requestAnimationFrame(update);
 }
 
+function initCharts() {
+  const usageOptions = {
+    series: [
+      {
+        name: 'Tokens',
+        data: [0, 0, 0, 0, 0, 0, 0],
+      },
+    ],
+    chart: {
+      height: 350,
+      type: 'area',
+      toolbar: { show: false },
+      background: 'transparent',
+    },
+    theme: { mode: 'dark' },
+    colors: ['#6366f1'],
+    fill: {
+      type: 'gradient',
+      gradient: {
+        shadeIntensity: 1,
+        opacityFrom: 0.7,
+        opacityTo: 0.2,
+        stops: [0, 90, 100],
+      },
+    },
+    dataLabels: { enabled: false },
+    stroke: { curve: 'smooth', width: 2 },
+    xaxis: {
+      categories: [
+        '00:00',
+        '04:00',
+        '08:00',
+        '12:00',
+        '16:00',
+        '20:00',
+        '23:59',
+      ],
+      axisBorder: { show: false },
+      axisTicks: { show: false },
+    },
+    grid: { borderColor: 'rgba(255,255,255,0.05)' },
+  };
+
+  const latencyOptions = {
+    series: [400, 300, 500],
+    chart: {
+      type: 'donut',
+      height: 350,
+      background: 'transparent',
+    },
+    labels: ['Gemini', 'Claude', 'GPT'],
+    theme: { mode: 'dark' },
+    colors: ['#6366f1', '#fb923c', '#34d399'],
+    legend: { position: 'bottom' },
+    dataLabels: { enabled: false },
+    plotOptions: {
+      pie: {
+        donut: {
+          size: '70%',
+          labels: {
+            show: true,
+            total: {
+              show: true,
+              label: 'Avg Latency',
+              formatter: () => '450ms',
+            },
+          },
+        },
+      },
+    },
+  };
+
+  if (!usageChart) {
+    usageChart = new ApexCharts(
+      document.querySelector('#usage-chart'),
+      usageOptions,
+    );
+    usageChart.render();
+  }
+
+  if (!latencyChart) {
+    latencyChart = new ApexCharts(
+      document.querySelector('#latency-chart'),
+      latencyOptions,
+    );
+    latencyChart.render();
+  }
+}
+
 function updateUI() {
   if (!currentStatus) return;
+
+  // Initialize charts on first load
+  initCharts();
 
   // Animate Stats
   const statsMapping = {

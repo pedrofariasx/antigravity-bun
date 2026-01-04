@@ -40,10 +40,11 @@ export class ApiKeysService {
     corsOrigin = '*',
   ): { key: string; id: number } {
     const rawKey = this.authService.generateApiKey();
+    const hashedKey = this.authService.hashApiKey(rawKey);
 
     const result = this.databaseService.createApiKey(
       name,
-      rawKey, // Store the key directly for simplicity
+      hashedKey, // Store the hashed key
       dailyLimit,
       rateLimitPerMinute,
       smartContext,
@@ -65,12 +66,13 @@ export class ApiKeysService {
     return this.databaseService.getAllApiKeys() as ApiKey[];
   }
 
-  getApiKeyByKey(key: string): ApiKey | undefined {
-    return this.databaseService.getApiKeyByKey(key) as ApiKey | undefined;
+  getApiKeyByRawKey(rawKey: string): ApiKey | undefined {
+    const hash = this.authService.hashApiKey(rawKey);
+    return this.databaseService.getApiKeyByHash(hash) as ApiKey | undefined;
   }
 
   validateApiKey(key: string): { valid: boolean; keyData?: ApiKey } {
-    const keyData = this.getApiKeyByKey(key);
+    const keyData = this.getApiKeyByRawKey(key);
 
     if (!keyData) {
       return { valid: false };

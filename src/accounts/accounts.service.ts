@@ -5,6 +5,7 @@ import {
   Inject,
   forwardRef,
 } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { QuotaService } from '../quota/quota.service';
@@ -547,5 +548,31 @@ export class AccountsService implements OnModuleInit {
 
   private generateFakeProjectId(): string {
     return `antigravity-project-${Math.random().toString(16).substring(2, 7)}`;
+  }
+
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleTokenRefreshCron() {
+    this.logger.debug('Running background token refresh check...');
+    const now = Date.now();
+    const tenMinutesInMs = 10 * 60 * 1000;
+
+    for (const state of this.accountsList) {
+      const needsRefresh = now + tenMinutesInMs >= state.credential.expiryDate;
+      if (needsRefresh) {
+        this.logger.log(
+          `Background refresh: Account ${state.credential.email} is expiring soon. Refreshing...`,
+        );
+        try {
+          await this.refreshToken(state);
+          this.logger.log(
+            `Successfully refreshed token for ${state.credential.email} in background.`,
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed background refresh for ${state.credential.email}: ${error.message}`,
+          );
+        }
+      }
+    }
   }
 }

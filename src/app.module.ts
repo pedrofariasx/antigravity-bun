@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { WebhookService } from './common/services/webhook.service';
 import { AccountsModule } from './accounts/accounts.module';
 import { AntigravityModule } from './antigravity/antigravity.module';
 import { OAuthModule } from './oauth/oauth.module';
@@ -17,6 +21,13 @@ import configuration from './config/configuration';
       isGlobal: true,
       load: [configuration],
     }),
+    ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     DatabaseModule,
     AuthModule,
     ApiKeysModule,
@@ -26,6 +37,14 @@ import configuration from './config/configuration';
     QuotaModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    WebhookService,
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
+  ],
+  exports: [WebhookService],
 })
 export class AppModule {}

@@ -60,7 +60,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         smart_context_limit INTEGER DEFAULT 10,
         allowed_models TEXT DEFAULT '*',
         description TEXT,
-        cors_origin TEXT DEFAULT '*'
+        cors_origin TEXT DEFAULT '*',
+        webhook_url TEXT
       )
     `);
 
@@ -75,6 +76,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       { name: 'allowed_models', type: "TEXT DEFAULT '*'" },
       { name: 'description', type: 'TEXT' },
       { name: 'cors_origin', type: "TEXT DEFAULT '*'" },
+      { name: 'webhook_url', type: 'TEXT' },
     ];
 
     for (const col of migrationColumns) {
@@ -247,11 +249,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     return stmt.run(...params);
   }
 
-  getApiKeyByKey(key: string) {
+  getApiKeyByHash(hash: string) {
     const stmt = this.db.prepare(
       'SELECT * FROM api_keys WHERE key = ? AND is_active = 1',
     );
-    return stmt.get(key);
+    return stmt.get(hash);
   }
 
   getAllApiKeys() {

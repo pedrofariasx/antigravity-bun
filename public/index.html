@@ -25,6 +25,8 @@
     />
 
     <link rel="stylesheet" href="/public/style.css" />
+    <!-- Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   </head>
   <body>
     <div class="container">
@@ -270,6 +272,70 @@
             </div>
             <div id="stat-errors" class="stat-value error">0</div>
             <div class="stat-footer">Needs attention</div>
+          </div>
+        </div>
+
+        <!-- Analytics Section -->
+        <div
+          class="analytics-grid"
+          style="
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+          "
+        >
+          <div class="section-box" style="margin-bottom: 0">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>Usage Analytics</h2>
+                <span class="badge">Last 24h</span>
+              </div>
+            </div>
+            <div
+              id="usage-chart"
+              style="padding: 20px; height: 350px; background: var(--bg-glass)"
+            ></div>
+          </div>
+          <div class="section-box" style="margin-bottom: 0">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>Latency</h2>
+                <span class="badge">Real-time</span>
+              </div>
+            </div>
+            <div
+              id="latency-chart"
+              style="padding: 20px; height: 350px; background: var(--bg-glass)"
+            ></div>
+          </div>
+        </div>
+        <div
+          class="analytics-grid"
+          style="
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+            margin-bottom: 40px;
+          "
+        >
+          <div class="section-box" style="margin-bottom: 0">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>Usage Analytics</h2>
+                <span class="badge">Last 24h</span>
+              </div>
+            </div>
+            <div id="usage-chart" style="padding: 20px; height: 350px"></div>
+          </div>
+          <div class="section-box" style="margin-bottom: 0">
+            <div class="section-header">
+              <div class="section-title">
+                <h2>Latency</h2>
+                <span class="badge">Real-time</span>
+              </div>
+            </div>
+            <div id="latency-chart" style="padding: 20px; height: 350px"></div>
           </div>
         </div>
 

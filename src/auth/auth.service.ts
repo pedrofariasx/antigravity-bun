@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
+import * as CryptoJS from 'crypto-js';
 
 @Injectable()
 export class AuthService {
@@ -108,6 +109,10 @@ export class AuthService {
   }
 
   hashApiKey(key: string): string {
-    return crypto.createHash('sha256').update(key).digest('hex');
+    return CryptoJS.SHA256(key).toString();
+  }
+
+  verifyApiKey(rawKey: string, hashedKey: string): boolean {
+    return this.hashApiKey(rawKey) === hashedKey;
   }
 }

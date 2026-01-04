@@ -27,6 +27,7 @@ import {
 import { SSEStreamParser } from '../common/utils';
 import { QuotaStatusResponse } from '../quota/interfaces';
 import { ApiKeysService } from '../api-keys/api-keys.service';
+import { AntigravityClientService } from './services/antigravity-client.service';
 
 type ApiType = 'openai' | 'anthropic';
 
@@ -43,6 +44,7 @@ export class AntigravityService {
     private readonly quotaService: QuotaService,
     private readonly configService: ConfigService,
     private readonly apiKeysService: ApiKeysService,
+    private readonly antigravityClient: AntigravityClientService,
   ) {
     this.maxRetryAccounts =
       this.configService.get<number>('accounts.maxRetryAccounts') || 3;
@@ -152,19 +154,24 @@ export class AntigravityService {
     data: unknown,
     accountState: AccountState,
   ): Promise<Readable> {
-    const headers = await this.accountsService.getAuthHeaders(accountState);
-    const url = `${this.getBaseUrl()}:streamGenerateContent?alt=sse`;
-    const host = new URL(url).host;
+    const authHeaders = await this.accountsService.getAuthHeaders(accountState);
+    const endpoint = ':streamGenerateContent?alt=sse';
+    const baseUrl = this.antigravityClient.getBaseUrl();
+    const host = new URL(baseUrl).host;
 
-    const response: AxiosResponse<Readable> = await axios.post(url, data, {
-      headers: {
-        ...headers,
-        Host: host,
-        Accept: 'text/event-stream',
-        'User-Agent': USER_AGENT,
+    const response: AxiosResponse<Readable> = await axios.post(
+      `${baseUrl}${endpoint}`,
+      data,
+      {
+        headers: {
+          ...authHeaders,
+          Host: host,
+          Accept: 'text/event-stream',
+          'User-Agent': USER_AGENT,
+        },
+        responseType: 'stream',
       },
-      responseType: 'stream',
-    });
+    );
 
     return response.data;
   }
@@ -723,42 +730,25 @@ export class AntigravityService {
     data: unknown,
     accountState: AccountState,
   ): Promise<T> {
-    const headers = await this.accountsService.getAuthHeaders(accountState);
-
-    for (let i = 0; i < BASE_URLS.length; i++) {
-      const baseUrl =
-        BASE_URLS[(this.currentBaseUrlIndex + i) % BASE_URLS.length];
-      const url = `${baseUrl}${endpoint}`;
-
-      try {
-        this.logger.debug(`Making request to: ${url}`);
-
-        const response = await axios.post<T>(url, data, {
-          headers: {
-            ...headers,
-            'User-Agent': USER_AGENT,
-          },
-          timeout: 120000,
-        });
-
-        return response.data;
-      } catch (error) {
-        const axiosError = error as AxiosError<AntigravityError>;
-
-        if (axiosError.response?.status === 429) {
-          throw this.createHttpException(axiosError);
-        }
-
-        if (axiosError.response?.status === 401) {
+    try {
+      const headers = await this.accountsService.getAuthHeaders(accountState);
+      return await this.antigravityClient.makeRequest<T>(
+        endpoint,
+        data,
+        headers,
+      );
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
           try {
             await this.accountsService.refreshToken(accountState);
             const newHeaders =
               await this.accountsService.getAuthHeaders(accountState);
-            const response = await axios.post<T>(url, data, {
-              headers: { ...newHeaders, 'User-Agent': USER_AGENT },
-              timeout: 120000,
-            });
-            return response.data;
+            return await this.antigravityClient.makeRequest<T>(
+              endpoint,
+              data,
+              newHeaders,
+            );
           } catch {
             throw new HttpException(
               'Authentication failed',
@@ -766,22 +756,10 @@ export class AntigravityService {
             );
           }
         }
-
-        this.logger.warn(`Request to ${baseUrl} failed: ${axiosError.message}`);
-        if (i === BASE_URLS.length - 1) {
-          throw this.createHttpException(axiosError);
-        }
-
-        this.currentBaseUrlIndex =
-          (this.currentBaseUrlIndex + 1) % BASE_URLS.length;
+        throw this.createHttpException(error);
       }
+      throw error;
     }
-
-    throw new HttpException('All API endpoints failed', HttpStatus.BAD_GATEWAY);
-  }
-
-  private getBaseUrl(): string {
-    return BASE_URLS[this.currentBaseUrlIndex];
   }
 
   private createHttpException(
@@ -832,6 +810,8 @@ export class AntigravityService {
         return 'invalid_request_error';
       case 401:
         return 'invalid_api_key';
+      case 403:
+        return 'insufficient_quota';
       case 404:
         return 'model_not_found';
       case 429:

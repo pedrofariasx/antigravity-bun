@@ -4,6 +4,7 @@ import { AntigravityController } from './antigravity.controller';
 import { AntigravityService } from './antigravity.service';
 import { AnthropicTransformerService } from './services/anthropic-transformer.service';
 import { TransformerService } from './services/transformer.service';
+import { AntigravityClientService } from './services/antigravity-client.service';
 import { QuotaModule } from '../quota/quota.module';
 import { ApiKeysModule } from '../api-keys/api-keys.module';
 
@@ -14,6 +15,7 @@ import { ApiKeysModule } from '../api-keys/api-keys.module';
     AntigravityService,
     AnthropicTransformerService,
     TransformerService,
+    AntigravityClientService,
   ],
   exports: [AntigravityService],
 })
