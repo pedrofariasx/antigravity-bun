@@ -228,9 +228,10 @@ async function fetchData() {
   try {
     showSkeletonLoading();
 
-    const [dashboardRes, modelsRes] = await Promise.all([
+    const [dashboardRes, modelsRes, analyticsRes] = await Promise.all([
       fetch('/api/dashboard'),
       fetch('/api/models'),
+      fetch('/api/keys/stats/analytics'),
     ]);
 
     if (dashboardRes.status === 401) {
@@ -244,13 +245,14 @@ async function fetchData() {
 
     const dashboardData = await dashboardRes.json();
     const modelsData = await modelsRes.json();
+    const analyticsData = analyticsRes.ok ? await analyticsRes.json() : null;
 
     currentStatus = dashboardData.status;
     currentQuotaStatus = dashboardData.quotaStatus;
     availableModels = modelsData.data.map((m) => m.id);
 
     isLoading = false;
-    updateUI();
+    updateUI(analyticsData);
 
     // Also fetch keys in background if we're on the keys view
     if (document.getElementById('view-keys').classList.contains('active')) {
@@ -839,11 +841,11 @@ function initCharts() {
   }
 }
 
-function updateUI() {
+function updateUI(analyticsData) {
   if (!currentStatus) return;
 
   // Initialize charts on first load
-  initCharts();
+  initCharts(analyticsData);
 
   // Animate Stats
   const statsMapping = {

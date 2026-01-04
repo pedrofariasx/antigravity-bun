@@ -281,6 +281,19 @@ export class ApiKeysController {
     return res.json({ stats });
   }
 
+  @Get('stats/analytics')
+  @ApiOperation({ summary: 'Get detailed usage analytics for charts' })
+  getAnalytics(@Req() req: Request, @Res() res: Response) {
+    if (!checkDashboardAuth(this.authService, req)) {
+      return res
+        .status(HttpStatus.UNAUTHORIZED)
+        .json({ error: 'Unauthorized' });
+    }
+
+    const analytics = this.apiKeysService.getAnalyticsData();
+    return res.json(analytics);
+  }
+
   @Get('logs')
   @ApiOperation({ summary: 'Get recent request logs' })
   getLogs(@Req() req: Request, @Res() res: Response) {

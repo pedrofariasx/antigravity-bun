@@ -140,6 +140,53 @@ export class ApiKeysService {
     return this.databaseService.getStatsForToday();
   }
 
+  getAnalyticsData() {
+    const logs = this.databaseService.getRecentLogs(500);
+
+    // Group by hour for usage chart
+    const usageByHour = new Map<string, number>();
+    const latencyByModel = new Map<string, { total: number; count: number }>();
+
+    const now = new Date();
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(now);
+      d.setHours(now.getHours() - i);
+      const hourStr = d.getHours().toString().padStart(2, '0') + ':00';
+      usageByHour.set(hourStr, 0);
+    }
+
+    (logs as any[]).forEach((log) => {
+      const date = new Date(log.created_at);
+      const hourStr = date.getHours().toString().padStart(2, '0') + ':00';
+      const tokens = (log.tokens_input || 0) + (log.tokens_output || 0);
+
+      if (usageByHour.has(hourStr)) {
+        usageByHour.set(hourStr, (usageByHour.get(hourStr) || 0) + tokens);
+      }
+
+      if (log.latency_ms && log.model) {
+        const stats = latencyByModel.get(log.model) || { total: 0, count: 0 };
+        stats.total += log.latency_ms;
+        stats.count += 1;
+        latencyByModel.set(log.model, stats);
+      }
+    });
+
+    const categories = Array.from(usageByHour.keys()).reverse();
+    const data = Array.from(usageByHour.values()).reverse();
+
+    const latencyLabels = Array.from(latencyByModel.keys());
+    const latencyValues = latencyLabels.map((m) => {
+      const s = latencyByModel.get(m)!;
+      return Math.round(s.total / s.count);
+    });
+
+    return {
+      usage: { categories, data },
+      latency: { labels: latencyLabels, data: latencyValues },
+    };
+  }
+
   getRecentLogs(limit = 100) {
     return this.databaseService.getRecentLogs(limit);
   }
