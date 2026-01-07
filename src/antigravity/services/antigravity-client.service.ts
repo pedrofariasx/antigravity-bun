@@ -1,12 +1,8 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
 import { BASE_URLS, USER_AGENT } from '../constants';
-import { AccountState } from '../../accounts/interfaces';
 import { AntigravityError } from '../interfaces';
 
-@Injectable()
 export class AntigravityClientService {
-  private readonly logger = new Logger(AntigravityClientService.name);
   private currentBaseUrlIndex = 0;
 
   async makeRequest<T>(
@@ -20,7 +16,7 @@ export class AntigravityClientService {
       const url = `${baseUrl}${endpoint}`;
 
       try {
-        this.logger.debug(`Making request to: ${url}`);
+        console.debug(`[AntigravityClient] Making request to: ${url}`);
 
         const response = await axios.post<T>(url, data, {
           headers: {
@@ -31,7 +27,7 @@ export class AntigravityClientService {
         });
 
         return response.data;
-      } catch (error) {
+      } catch (error: any) {
         const axiosError = error as AxiosError<AntigravityError>;
 
         if (
@@ -41,7 +37,9 @@ export class AntigravityClientService {
           throw error; // Rethrow to let the caller handle rotation or refresh
         }
 
-        this.logger.warn(`Request to ${baseUrl} failed: ${axiosError.message}`);
+        console.warn(
+          `[AntigravityClient] Request to ${baseUrl} failed: ${axiosError.message}`,
+        );
         if (i === BASE_URLS.length - 1) {
           throw error;
         }
@@ -51,10 +49,12 @@ export class AntigravityClientService {
       }
     }
 
-    throw new HttpException('All API endpoints failed', HttpStatus.BAD_GATEWAY);
+    throw new Error('All API endpoints failed');
   }
 
   getBaseUrl(): string {
     return BASE_URLS[this.currentBaseUrlIndex];
   }
 }
+
+export const antigravityClientService = new AntigravityClientService();

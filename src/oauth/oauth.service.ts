@@ -1,7 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import axios, { AxiosResponse } from 'axios';
-import { AccountsService } from '../accounts';
+import { config } from '../config/configuration';
+import { accountsService } from '../accounts/accounts.service';
 
 interface TokenResponse {
   access_token: string;
@@ -24,9 +23,7 @@ export interface OAuthResult {
   totalAccounts: number;
 }
 
-@Injectable()
 export class OAuthService {
-  private readonly logger = new Logger(OAuthService.name);
   private readonly CLIENT_ID: string;
   private readonly CLIENT_SECRET: string;
   private readonly TOKEN_URI = 'https://oauth2.googleapis.com/token';
@@ -39,40 +36,28 @@ export class OAuthService {
     'https://www.googleapis.com/auth/cclog',
     'https://www.googleapis.com/auth/experimentsandconfigs',
   ];
-  private getRedirectUriInternal(): string {
-    // 1. Prioridade máxima: URL definida via variável de ambiente (OAUTH_REDIRECT_URI)
-    const envRedirect = this.configService.get<string>('oauth.redirectUri');
+
+  constructor() {
+    this.CLIENT_ID =
+      config.antigravity.clientId ||
+      '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
+    this.CLIENT_SECRET =
+      config.antigravity.clientSecret || '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';
+  }
+
+  getRedirectUri(): string {
+    const envRedirect = config.oauth.redirectUri;
     if (envRedirect) {
       return envRedirect;
     }
 
-    // 2. Fallback inteligente: constrói URL baseada na porta principal
-    // Isso resolve o problema de redirecionar para portas erradas (3001 vs 3000)
-    const port = this.configService.get<number>('port') || 3000;
-    const path =
-      this.configService.get<string>('oauth.callbackPath') || '/oauth/callback';
+    const port = config.port || 3000;
+    const path = config.oauth.callbackPath || '/oauth/callback';
     return `http://localhost:${port}${path}`;
   }
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly accountsService: AccountsService,
-  ) {
-    // Permite sobrescrever credenciais via .env
-    this.CLIENT_ID =
-      this.configService.get<string>('antigravity.clientId') ||
-      '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
-    this.CLIENT_SECRET =
-      this.configService.get<string>('antigravity.clientSecret') ||
-      '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';
-  }
-
-  getRedirectUri(): string {
-    return this.getRedirectUriInternal();
-  }
-
   getAuthorizationUrl(): string {
-    const redirectUri = this.getRedirectUriInternal();
+    const redirectUri = this.getRedirectUri();
     const params = new URLSearchParams({
       client_id: this.CLIENT_ID,
       redirect_uri: redirectUri,
@@ -86,7 +71,7 @@ export class OAuthService {
   }
 
   async exchangeCodeForTokens(code: string): Promise<OAuthResult> {
-    this.logger.log('Exchanging authorization code for tokens...');
+    console.log('[OAuth] Exchanging authorization code for tokens...');
 
     const response: AxiosResponse<TokenResponse> = await axios.post(
       this.TOKEN_URI,
@@ -94,7 +79,7 @@ export class OAuthService {
         code,
         client_id: this.CLIENT_ID,
         client_secret: this.CLIENT_SECRET,
-        redirect_uri: this.getRedirectUriInternal(),
+        redirect_uri: this.getRedirectUri(),
         grant_type: 'authorization_code',
       }),
       {
@@ -114,12 +99,12 @@ export class OAuthService {
         },
       );
       email = userInfo.data.email || 'unknown';
-      this.logger.log(`Authenticated as: ${email}`);
+      console.log(`[OAuth] Authenticated as: ${email}`);
     } catch {
-      this.logger.warn('Could not fetch user email');
+      console.warn('[OAuth] Could not fetch user email');
     }
 
-    const { id, accountNumber, isNew } = this.accountsService.addAccount({
+    const { id, accountNumber, isNew } = accountsService.addAccount({
       email,
       accessToken: access_token,
       refreshToken: refresh_token,
@@ -134,7 +119,9 @@ export class OAuthService {
       accountId: id,
       accountNumber,
       isNewAccount: isNew,
-      totalAccounts: this.accountsService.getAccountCount(),
+      totalAccounts: accountsService.getAccountCount(),
     };
   }
 }
+
+export const oauthService = new OAuthService();

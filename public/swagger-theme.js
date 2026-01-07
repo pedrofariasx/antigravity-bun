@@ -2,7 +2,7 @@
 (function () {
   function getStoredTheme() {
     try {
-      return localStorage.getItem('theme') || 'dark';
+      return localStorage.getItem('antigravity-theme') || 'dark';
     } catch (e) {
       return 'dark';
     }
@@ -38,7 +38,7 @@
 
   // Also listen for storage changes (when opened directly)
   window.addEventListener('storage', function (event) {
-    if (event.key === 'theme') {
+    if (event.key === 'antigravity-theme') {
       applyTheme(event.newValue || 'dark');
     }
   });

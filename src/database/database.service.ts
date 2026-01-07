@@ -1,50 +1,40 @@
-import {
-  Injectable,
-  OnModuleInit,
-  OnModuleDestroy,
-  Logger,
-} from '@nestjs/common';
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { join } from 'path';
+import * as fs from 'fs';
 
-@Injectable()
-export class DatabaseService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(DatabaseService.name);
-  private db: Database.Database;
+export class DatabaseService {
+  private db: Database;
 
-  onModuleInit() {
+  constructor() {
     this.initDatabase();
   }
 
   private initDatabase() {
-    // Use absolute path to ensure consistency across process forks
-    const dbPath = join(__dirname, '..', '..', 'data', 'antigravity.db');
-
-    // Ensure data directory exists
-    const fs = require('fs');
+    const dbPath = join(process.cwd(), 'data', 'antigravity.db');
     const dataDir = join(process.cwd(), 'data');
+
     if (!fs.existsSync(dataDir)) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('synchronous = NORMAL');
+    this.db = new Database(dbPath, { create: true });
+    this.db.exec('PRAGMA journal_mode = WAL;');
+    this.db.exec('PRAGMA synchronous = NORMAL;');
 
     this.initTables();
-    this.logger.log(`SQLite database initialized at ${dbPath}`);
+    console.log(`[Database] SQLite database initialized at ${dbPath}`);
   }
 
-  onModuleDestroy() {
+  close() {
     if (this.db) {
       this.db.close();
-      this.logger.log('Database connection closed');
+      console.log('[Database] Connection closed');
     }
   }
 
   private initTables() {
     // API Keys table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS api_keys (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         key TEXT UNIQUE NOT NULL,
@@ -81,15 +71,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     for (const col of migrationColumns) {
       try {
-        this.db.exec(`ALTER TABLE api_keys ADD COLUMN ${col.name} ${col.type}`);
-        this.logger.log(`Added column ${col.name} to api_keys table`);
+        this.db.run(`ALTER TABLE api_keys ADD COLUMN ${col.name} ${col.type}`);
       } catch {
         // Column already exists, ignore
       }
     }
 
     // Fix NULL values in existing records
-    this.db.exec(`
+    this.db.run(`
       UPDATE api_keys SET
         requests_count = COALESCE(requests_count, 0),
         tokens_used = COALESCE(tokens_used, 0),
@@ -103,7 +92,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     // Request logs table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS request_logs (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         api_key_id INTEGER,
@@ -119,7 +108,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     // Sessions table for dashboard auth
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS sessions (
         id TEXT PRIMARY KEY,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -128,7 +117,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     // Accounts table
-    this.db.exec(`
+    this.db.run(`
       CREATE TABLE IF NOT EXISTS accounts (
         id TEXT PRIMARY KEY,
         email TEXT UNIQUE NOT NULL,
@@ -145,18 +134,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     `);
 
     // Create indexes
-    this.db.exec(`
+    this.db.run(`
       CREATE INDEX IF NOT EXISTS idx_api_keys_key ON api_keys(key);
       CREATE INDEX IF NOT EXISTS idx_request_logs_api_key_id ON request_logs(api_key_id);
       CREATE INDEX IF NOT EXISTS idx_request_logs_created_at ON request_logs(created_at);
       CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
       CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
     `);
-
-    this.logger.log('Database tables initialized');
   }
 
-  getDb(): Database.Database {
+  getDb(): Database {
     return this.db;
   }
 
@@ -297,8 +284,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         .run(keyId);
       const stmt = this.db.prepare('DELETE FROM api_keys WHERE id = ?');
       return stmt.run(keyId);
-    } catch (e) {
-      this.logger.error(`Failed to delete API key: ${e.message}`);
+    } catch (e: any) {
+      console.error(`[Database] Failed to delete API key: ${e.message}`);
       return { changes: 0 };
     }
   }
@@ -406,10 +393,9 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         acc.expiryDate,
         acc.projectId || null,
       );
-      this.logger.log(`Account ${acc.email} saved to SQLite`);
       return result;
-    } catch (e) {
-      this.logger.error(`SQLite error in upsertAccount: ${e.message}`);
+    } catch (e: any) {
+      console.error(`[Database] SQLite error in upsertAccount: ${e.message}`);
       throw e;
     }
   }
@@ -440,33 +426,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       .run(reqInc, errorInc, id);
   }
 
-  deleteAccount(id: string) {
+  deleteAccount(id: string): any {
     return this.db.prepare('DELETE FROM accounts WHERE id = ?').run(id);
   }
 
   resetDatabase() {
-    this.logger.warn('Resetting database tables...');
-    // Delete data but keep tables structure to avoid recreating them constantly
-    // and preserve sessions if possible (optional, but good UX)
-
-    // We actually want to clear data, not drop tables necessarily.
-    // But dropping ensures clean slate for IDs autoincrement reset usually.
-    // However, to keep the current session alive, we should spare the 'sessions' table
-    // or specifically preserve the current session.
-    // For simplicity and "Reset" semantic, let's truncate data.
-
-    this.db.exec('DELETE FROM request_logs');
-    this.db.exec('DELETE FROM api_keys');
-    this.db.exec('DELETE FROM accounts');
-
-    // Reset sequence for autoincrement
-    this.db.exec(
+    console.warn('[Database] Resetting database tables...');
+    this.db.run('DELETE FROM request_logs');
+    this.db.run('DELETE FROM api_keys');
+    this.db.run('DELETE FROM accounts');
+    this.db.run(
       "DELETE FROM sqlite_sequence WHERE name IN ('api_keys', 'request_logs')",
     );
-
-    // We do NOT delete sessions so the admin stays logged in
-    // this.db.exec('DELETE FROM sessions');
-
     return { success: true };
   }
 
@@ -477,8 +448,10 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     for (const table of tables) {
       try {
         data[table] = this.db.prepare(`SELECT * FROM ${table}`).all();
-      } catch (e) {
-        this.logger.error(`Failed to export table ${table}: ${e.message}`);
+      } catch (e: any) {
+        console.error(
+          `[Database] Failed to export table ${table}: ${e.message}`,
+        );
         data[table] = [];
       }
     }
@@ -489,13 +462,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   importData(data: Record<string, any[]>) {
     const transaction = this.db.transaction(
       (payload: Record<string, any[]>) => {
+        // Temporarily disable foreign key constraints for bulk import
+        this.db.exec('PRAGMA foreign_keys = OFF;');
+
         // Clear existing data (but keep sessions)
+        this.db.prepare('DELETE FROM request_logs').run();
         this.db.prepare('DELETE FROM accounts').run();
         this.db.prepare('DELETE FROM api_keys').run();
-
-        if (payload.request_logs && payload.request_logs.length > 0) {
-          this.db.prepare('DELETE FROM request_logs').run();
-        }
 
         if (payload.accounts && payload.accounts.length > 0) {
           const insertAccount = this.db.prepare(`
@@ -504,22 +477,35 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
               status, last_used_at, request_count, error_count, created_at
             )
             VALUES (
-              @id, @email, @access_token, @refresh_token, @expiry_date, @project_id,
-              @status, @last_used_at, @request_count, @error_count, @created_at
+              $id, $email, $access_token, $refresh_token, $expiry_date, $project_id,
+              $status, $last_used_at, $request_count, $error_count, $created_at
             )
           `);
 
           for (const row of payload.accounts) {
-            // Ensure optional fields are present or null
+            // Explicit mapping to match named parameters
             const safeRow = {
-              ...row,
-              project_id: row.project_id || null,
-              last_used_at: row.last_used_at || null,
-              request_count: row.request_count || 0,
-              error_count: row.error_count || 0,
-              status: row.status || 'ready',
-              created_at: row.created_at || new Date().toISOString(),
+              $id: row.id,
+              $email: row.email,
+              $access_token: row.access_token,
+              $refresh_token: row.refresh_token,
+              $expiry_date: row.expiry_date,
+              $project_id: row.project_id || null,
+              $status: row.status || 'ready',
+              $last_used_at: row.last_used_at || null,
+              $request_count: row.request_count || 0,
+              $error_count: row.error_count || 0,
+              $created_at: row.created_at || new Date().toISOString(),
             };
+
+            if (!safeRow.$email) {
+              console.error(
+                '[Database Import] Skipping account with missing email:',
+                row,
+              );
+              continue;
+            }
+
             insertAccount.run(safeRow);
           }
         }
@@ -532,26 +518,39 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
               smart_context, smart_context_limit, allowed_models, description, cors_origin
             )
             VALUES (
-              @id, @key, @name, @created_at, @last_used_at, @is_active,
-              @requests_count, @tokens_used, @daily_limit, @rate_limit_per_minute,
-              @smart_context, @smart_context_limit, @allowed_models, @description, @cors_origin
+              $id, $key, $name, $created_at, $last_used_at, $is_active,
+              $requests_count, $tokens_used, $daily_limit, $rate_limit_per_minute,
+              $smart_context, $smart_context_limit, $allowed_models, $description, $cors_origin
             )
           `);
 
           for (const row of payload.api_keys) {
             const safeRow = {
-              ...row,
-              last_used_at: row.last_used_at || null,
-              requests_count: row.requests_count || 0,
-              tokens_used: row.tokens_used || 0,
-              daily_limit: row.daily_limit || 0,
-              rate_limit_per_minute: row.rate_limit_per_minute || 60,
-              smart_context: row.smart_context || 0,
-              smart_context_limit: row.smart_context_limit || 10,
-              allowed_models: row.allowed_models || '*',
-              description: row.description || null,
-              cors_origin: row.cors_origin || '*',
+              $id: row.id,
+              $key: row.key,
+              $name: row.name,
+              $created_at: row.created_at || new Date().toISOString(),
+              $last_used_at: row.last_used_at || null,
+              $is_active: row.is_active !== undefined ? row.is_active : 1,
+              $requests_count: row.requests_count || 0,
+              $tokens_used: row.tokens_used || 0,
+              $daily_limit: row.daily_limit || 0,
+              $rate_limit_per_minute: row.rate_limit_per_minute || 60,
+              $smart_context: row.smart_context || 0,
+              $smart_context_limit: row.smart_context_limit || 10,
+              $allowed_models: row.allowed_models || '*',
+              $description: row.description || null,
+              $cors_origin: row.cors_origin || '*',
             };
+
+            if (!safeRow.$key || !safeRow.$name) {
+              console.error(
+                '[Database Import] Skipping API Key with missing key/name:',
+                row,
+              );
+              continue;
+            }
+
             insertKey.run(safeRow);
           }
         }
@@ -563,27 +562,41 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
               latency_ms, status, error_message, created_at
             )
             VALUES (
-              @id, @api_key_id, @model, @tokens_input, @tokens_output,
-              @latency_ms, @status, @error_message, @created_at
+              $id, $api_key_id, $model, $tokens_input, $tokens_output,
+              $latency_ms, $status, $error_message, $created_at
             )
           `);
 
           for (const row of payload.request_logs) {
-            insertLog.run({
-              ...row,
-              error_message: row.error_message || null,
-            });
+            const safeRow = {
+              $id: row.id,
+              $api_key_id: row.api_key_id || null,
+              $model: row.model || 'unknown',
+              $tokens_input: row.tokens_input || 0,
+              $tokens_output: row.tokens_output || 0,
+              $latency_ms: row.latency_ms || 0,
+              $status: row.status || 'unknown',
+              $error_message: row.error_message || null,
+              $created_at: row.created_at || new Date().toISOString(),
+            };
+            insertLog.run(safeRow);
           }
         }
+
+        // Re-enable foreign key constraints
+        this.db.exec('PRAGMA foreign_keys = ON;');
       },
     );
 
     try {
       transaction(data);
       return { success: true };
-    } catch (e) {
-      this.logger.error(`Import failed: ${e.message}`);
+    } catch (e: any) {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      console.error(`[Database] Import failed: ${e.message}`);
       throw e;
     }
   }
 }
+
+export const databaseService = new DatabaseService();

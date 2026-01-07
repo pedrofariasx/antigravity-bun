@@ -1,16 +1,8 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  Inject,
-  forwardRef,
-} from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
-import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
-import { QuotaService } from '../quota/quota.service';
-import { DatabaseService } from '../database/database.service';
-import { EventsService } from '../events/events.service';
+import { config } from '../config/configuration';
+import { quotaService } from '../quota/quota.service';
+import { databaseService } from '../database/database.service';
+import { eventsService } from '../events/events.service';
 import {
   AccountCredential,
   AccountState,
@@ -30,14 +22,7 @@ interface LoadCodeAssistResponse {
   allowedTiers?: Array<{ id: string; isDefault?: boolean }>;
 }
 
-interface OnboardUserResponse {
-  done?: boolean;
-  response?: { cloudaicompanionProject?: { id: string } };
-}
-
-@Injectable()
-export class AccountsService implements OnModuleInit {
-  private readonly logger = new Logger(AccountsService.name);
+export class AccountsService {
   private accountStatesMap = new Map<string, AccountState>();
   private accountsList: AccountState[] = [];
   private emailToIdMap = new Map<string, string>();
@@ -50,23 +35,22 @@ export class AccountsService implements OnModuleInit {
   private readonly clientId: string;
   private readonly clientSecret: string;
 
-  constructor(
-    private readonly configService: ConfigService,
-    @Inject(forwardRef(() => QuotaService))
-    private readonly quotaService: QuotaService,
-    private readonly databaseService: DatabaseService,
-    private readonly eventsService: EventsService,
-  ) {
-    this.COOLDOWN_DURATION_MS =
-      this.configService.get<number>('accounts.cooldownDurationMs') || 60000;
-    this.clientId =
-      this.configService.get<string>('antigravity.clientId') || '';
-    this.clientSecret =
-      this.configService.get<string>('antigravity.clientSecret') || '';
+  constructor() {
+    this.COOLDOWN_DURATION_MS = config.accounts.cooldownDurationMs || 60000;
+    this.clientId = config.antigravity.clientId || '';
+    this.clientSecret = config.antigravity.clientSecret || '';
+    this.loadAccounts();
+    this.startCronJobs();
   }
 
-  onModuleInit() {
-    this.loadAccounts();
+  private startCronJobs() {
+    // Background token refresh every 5 minutes
+    setInterval(
+      () => {
+        this.handleTokenRefreshCron();
+      },
+      5 * 60 * 1000,
+    );
   }
 
   public reloadAccounts(): void {
@@ -77,20 +61,17 @@ export class AccountsService implements OnModuleInit {
   }
 
   private loadAccounts(): void {
-    // 1. Load all from DB
-    const dbAccounts = this.databaseService.getAccounts() as any[];
+    const dbAccounts = databaseService.getAccounts() as any[];
 
-    // 2. Initial Migration: If DB is empty, migrate from .env once
     if (dbAccounts.length === 0) {
-      const envAccounts =
-        this.configService.get<AccountCredential[]>('accounts.list') || [];
+      const envAccounts = config.accounts.list || [];
       if (envAccounts.length > 0) {
-        this.logger.log(
-          `Initial setup: Migrating ${envAccounts.length} accounts from .env to SQLite...`,
+        console.log(
+          `[Accounts] Initial setup: Migrating ${envAccounts.length} accounts from .env to SQLite...`,
         );
         envAccounts.forEach((acc, index) => {
           const id = `account-${index + 1}`;
-          this.databaseService.upsertAccount({
+          databaseService.upsertAccount({
             id,
             email: acc.email,
             accessToken: acc.accessToken,
@@ -99,15 +80,14 @@ export class AccountsService implements OnModuleInit {
             projectId: acc.projectId,
           });
         });
-        // Reload after migration
         this.loadAccounts();
         return;
       }
     }
 
     if (dbAccounts.length === 0) {
-      this.logger.warn(
-        'No accounts configured. Visit /oauth/authorize to add accounts.',
+      console.warn(
+        '[Accounts] No accounts configured. Visit /oauth/authorize to add accounts.',
       );
       return;
     }
@@ -135,8 +115,8 @@ export class AccountsService implements OnModuleInit {
       this.emailToIdMap.set(acc.email, acc.id);
     });
 
-    this.logger.log(
-      `Loaded ${this.accountStatesMap.size} account(s) from SQLite`,
+    console.log(
+      `[Accounts] Loaded ${this.accountStatesMap.size} account(s) from SQLite`,
     );
   }
 
@@ -159,9 +139,9 @@ export class AccountsService implements OnModuleInit {
       ) {
         state.status = 'ready';
         state.cooldownUntil = undefined;
-        this.databaseService.updateAccountStatus(state.id, 'ready');
-        this.logger.debug(
-          `Account ${state.id} cooldown expired, marking as ready`,
+        databaseService.updateAccountStatus(state.id, 'ready');
+        console.debug(
+          `[Accounts] Account ${state.id} cooldown expired, marking as ready`,
         );
       }
     });
@@ -170,7 +150,7 @@ export class AccountsService implements OnModuleInit {
   }
 
   deleteAccount(id: string): boolean {
-    const result = this.databaseService.deleteAccount(id);
+    const result = databaseService.deleteAccount(id);
     if (result.changes > 0) {
       this.accountStatesMap.delete(id);
       const index = this.accountsList.findIndex((s) => s.id === id);
@@ -179,7 +159,7 @@ export class AccountsService implements OnModuleInit {
         this.accountsList.splice(index, 1);
         this.emailToIdMap.delete(email);
       }
-      this.logger.log(`Deleted account ID: ${id}`);
+      console.log(`[Accounts] Deleted account ID: ${id}`);
       return true;
     }
     return false;
@@ -196,7 +176,7 @@ export class AccountsService implements OnModuleInit {
       let score = 0;
 
       if (modelName) {
-        const quotaStatus = this.quotaService.getQuotaStatus([
+        const quotaStatus = quotaService.getQuotaStatus([
           { id: state.id, email: state.credential.email },
         ]);
         const accountQuota = quotaStatus.accounts[0]?.models.find(
@@ -257,11 +237,11 @@ export class AccountsService implements OnModuleInit {
       state.cooldownUntil =
         Date.now() + this.COOLDOWN_DURATION_MS * backoffFactor;
       state.errorCount++;
-      this.databaseService.updateAccountStatus(accountId, 'cooldown');
-      this.logger.warn(
-        `Account ${accountId} marked as cooldown until ${new Date(state.cooldownUntil).toISOString()}`,
+      databaseService.updateAccountStatus(accountId, 'cooldown');
+      console.warn(
+        `[Accounts] Account ${accountId} marked as cooldown until ${new Date(state.cooldownUntil).toISOString()}`,
       );
-      this.eventsService.emitDashboardUpdate(this.getStatus());
+      eventsService.emitDashboardUpdate(this.getStatus());
     }
   }
 
@@ -270,11 +250,11 @@ export class AccountsService implements OnModuleInit {
     if (state) {
       state.status = 'error';
       state.errorCount++;
-      this.databaseService.updateAccountStatus(accountId, 'error');
-      this.logger.error(
-        `Account ${accountId} (${state.credential.email}) marked as error`,
+      databaseService.updateAccountStatus(accountId, 'error');
+      console.error(
+        `[Accounts] Account ${accountId} (${state.credential.email}) marked as error`,
       );
-      this.eventsService.emitDashboardUpdate(this.getStatus());
+      eventsService.emitDashboardUpdate(this.getStatus());
     }
   }
 
@@ -288,9 +268,9 @@ export class AccountsService implements OnModuleInit {
         state.status = 'ready';
         state.cooldownUntil = undefined;
       }
-      this.databaseService.updateAccountStatus(accountId, 'ready');
-      this.databaseService.incrementAccountUsage(accountId, false);
-      this.eventsService.emitDashboardUpdate(this.getStatus());
+      databaseService.updateAccountStatus(accountId, 'ready');
+      databaseService.incrementAccountUsage(accountId, false);
+      eventsService.emitDashboardUpdate(this.getStatus());
     }
   }
 
@@ -309,7 +289,7 @@ export class AccountsService implements OnModuleInit {
       existing.status = 'ready';
       existing.errorCount = 0;
 
-      this.databaseService.upsertAccount({
+      databaseService.upsertAccount({
         id: existing.id,
         email: credential.email,
         accessToken: credential.accessToken,
@@ -318,12 +298,14 @@ export class AccountsService implements OnModuleInit {
         projectId: existing.credential.projectId,
       });
 
+      // Notify dashboard of the update
+      eventsService.emitDashboardUpdate(this.getStatus());
+
       const accountNumber =
         this.accountsList.findIndex((s) => s.id === existingId) + 1;
       return { id: existing.id, accountNumber, isNew: false };
     }
 
-    // Encontra o próximo número sequencial disponível
     const existingNums = this.accountsList
       .map((s) => {
         const match = s.id.match(/^account-(\d+)$/);
@@ -346,7 +328,7 @@ export class AccountsService implements OnModuleInit {
     this.accountsList.push(newState);
     this.emailToIdMap.set(credential.email, id);
 
-    this.databaseService.upsertAccount({
+    databaseService.upsertAccount({
       id,
       email: credential.email,
       accessToken: credential.accessToken,
@@ -354,25 +336,26 @@ export class AccountsService implements OnModuleInit {
       expiryDate: credential.expiryDate,
     });
 
+    // Notify dashboard of the new account
+    eventsService.emitDashboardUpdate(this.getStatus());
+
     return { id, accountNumber: this.accountsList.length, isNew: true };
   }
 
   getStatus(): AccountStatusResponse {
-    const accounts: AccountPublicInfo[] = this.accountsList.map(
-      (state, index) => {
-        return {
-          id: state.id,
-          email: state.credential.email,
-          status: state.status,
-          cooldownUntil: state.cooldownUntil,
-          lastUsed: state.lastUsed,
-          requestCount: state.requestCount,
-          errorCount: state.errorCount,
-          consecutiveErrors: state.consecutiveErrors,
-          envText: `SQLite Persisted`,
-        };
-      },
-    );
+    const accounts: AccountPublicInfo[] = this.accountsList.map((state) => {
+      return {
+        id: state.id,
+        email: state.credential.email,
+        status: state.status,
+        cooldownUntil: state.cooldownUntil,
+        lastUsed: state.lastUsed,
+        requestCount: state.requestCount,
+        errorCount: state.errorCount,
+        consecutiveErrors: state.consecutiveErrors,
+        envText: `SQLite Persisted`,
+      };
+    });
 
     return {
       totalAccounts: this.accountStatesMap.size,
@@ -406,8 +389,7 @@ export class AccountsService implements OnModuleInit {
   }
 
   async getAccessToken(state: AccountState): Promise<string> {
-    // Reload from DB to ensure we have the latest token (refreshed by Admin instance)
-    const allDb = this.databaseService.getAccounts() as any[];
+    const allDb = databaseService.getAccounts() as any[];
     const dbAcc = allDb.find((a) => a.id === state.id);
     if (dbAcc) {
       state.credential.accessToken = dbAcc.access_token;
@@ -452,7 +434,7 @@ export class AccountsService implements OnModuleInit {
         state.credential.refreshToken = response.data.refresh_token;
       }
 
-      this.databaseService.upsertAccount({
+      databaseService.upsertAccount({
         id: state.id,
         email: state.credential.email,
         accessToken: state.credential.accessToken,
@@ -461,12 +443,11 @@ export class AccountsService implements OnModuleInit {
         projectId: state.credential.projectId,
       });
 
-      this.logger.debug(`Refreshed token for account ${state.id}`);
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(
-        `Failed to refresh token for account ${state.id}: ${errorMessage}`,
+      console.debug(`[Accounts] Refreshed token for account ${state.id}`);
+    } catch (error: any) {
+      const errorMessage = error.message;
+      console.error(
+        `[Accounts] Failed to refresh token for account ${state.id}: ${errorMessage}`,
       );
       this.markError(state.id);
       throw new Error(`Token refresh failed: ${errorMessage}`);
@@ -513,7 +494,7 @@ export class AccountsService implements OnModuleInit {
       );
       const serverProject = loadResponse.data.cloudaicompanionProject;
       if (serverProject) {
-        this.databaseService.upsertAccount({
+        databaseService.upsertAccount({
           ...state.credential,
           id: state.id,
           projectId: serverProject,
@@ -526,58 +507,33 @@ export class AccountsService implements OnModuleInit {
     }
   }
 
-  private async onboardUser(
-    tierId: string,
-    headers: Record<string, string>,
-  ): Promise<string | null> {
-    for (let i = 0; i < 60; i++) {
-      const response = await axios.post<OnboardUserResponse>(
-        `${this.CODE_ASSIST_ENDPOINT}:onboardUser`,
-        {
-          tierId,
-          cloudaicompanionProject: null,
-          metadata: {
-            ideType: 'IDE_UNSPECIFIED',
-            platform: 'PLATFORM_UNSPECIFIED',
-            pluginType: 'GEMINI',
-          },
-        },
-        { headers, timeout: 30000 },
-      );
-      if (response.data.done)
-        return response.data.response?.cloudaicompanionProject?.id || null;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
-    return null;
-  }
-
   private generateFakeProjectId(): string {
     return `antigravity-project-${Math.random().toString(16).substring(2, 7)}`;
   }
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleTokenRefreshCron() {
-    this.logger.debug('Running background token refresh check...');
     const now = Date.now();
     const tenMinutesInMs = 10 * 60 * 1000;
 
     for (const state of this.accountsList) {
       const needsRefresh = now + tenMinutesInMs >= state.credential.expiryDate;
       if (needsRefresh) {
-        this.logger.log(
-          `Background refresh: Account ${state.credential.email} is expiring soon. Refreshing...`,
+        console.log(
+          `[Accounts] Background refresh: Account ${state.credential.email} is expiring soon. Refreshing...`,
         );
         try {
           await this.refreshToken(state);
-          this.logger.log(
-            `Successfully refreshed token for ${state.credential.email} in background.`,
+          console.log(
+            `[Accounts] Successfully refreshed token for ${state.credential.email} in background.`,
           );
-        } catch (error) {
-          this.logger.error(
-            `Failed background refresh for ${state.credential.email}: ${error.message}`,
+        } catch (error: any) {
+          console.error(
+            `[Accounts] Failed background refresh for ${state.credential.email}: ${error.message}`,
           );
         }
       }
     }
   }
 }
+
+export const accountsService = new AccountsService();

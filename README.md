@@ -50,8 +50,7 @@
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
+- Bun 1.0+
 
 ### Installation
 
@@ -61,13 +60,13 @@ git clone https://github.com/pedrofariasx/antigravity.git
 cd antigravity
 
 # Install dependencies
-npm install
+bun install
 
 # Copy configuration file
 cp .env.example .env
 
 # Start in development mode
-npm run start:dev
+bun run start:dev
 ```
 
 The server will be available at `http://localhost:3000`

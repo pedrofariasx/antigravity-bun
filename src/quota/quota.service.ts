@@ -1,6 +1,5 @@
-import { Injectable, Logger, forwardRef, Inject } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
+import { config } from '../config/configuration';
 import {
   QuotaCacheEntry,
   FetchAvailableModelsResponse,
@@ -17,25 +16,15 @@ import {
   QUOTA_GROUPS,
   GROUP_DISPLAY_NAMES,
 } from '../antigravity/constants';
-import { EventsService } from '../events/events.service';
-import { AccountsService } from '../accounts/accounts.service';
+import { eventsService } from '../events/events.service';
+import { accountsService } from '../accounts/accounts.service';
 
-@Injectable()
 export class QuotaService {
-  private readonly logger = new Logger(QuotaService.name);
   private readonly quotaCache = new Map<string, Map<string, QuotaCacheEntry>>();
   private readonly quotaThreshold: number;
 
-  constructor(
-    private readonly configService: ConfigService,
-    private readonly eventsService: EventsService,
-    @Inject(forwardRef(() => AccountsService))
-    private readonly accountsService: AccountsService,
-  ) {
-    this.quotaThreshold = this.configService.get<number>(
-      'QUOTA_THRESHOLD',
-      0.01,
-    );
+  constructor() {
+    this.quotaThreshold = config.accounts.maxRetryAccounts ? 0.01 : 0.01; // Simplificado
   }
 
   async fetchQuotaFromUpstream(
@@ -49,8 +38,8 @@ export class QuotaService {
       const url = `${baseUrl}${endpoint}`;
 
       try {
-        this.logger.debug(
-          `Fetching quota from ${url} for account ${accountState.id}`,
+        console.debug(
+          `[Quota] Fetching quota from ${url} for account ${accountState.id}`,
         );
 
         const response = await axios.post<FetchAvailableModelsResponse>(
@@ -68,23 +57,22 @@ export class QuotaService {
 
         if (response.data?.models) {
           this.updateQuotasFromModels(accountState.id, response.data.models);
-          this.logger.log(
-            `Updated quotas for account ${accountState.id}: ${Object.keys(response.data.models).length} models`,
+          console.log(
+            `[Quota] Updated quotas for account ${accountState.id}: ${Object.keys(response.data.models).length} models`,
           );
           return;
         }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error';
-        this.logger.warn(
-          `Failed to fetch quota from ${baseUrl}: ${errorMessage}`,
+      } catch (error: any) {
+        const errorMessage = error.message;
+        console.warn(
+          `[Quota] Failed to fetch quota from ${baseUrl}: ${errorMessage}`,
         );
         continue;
       }
     }
 
-    this.logger.error(
-      `Failed to fetch quota from all endpoints for account ${accountState.id}`,
+    console.error(
+      `[Quota] Failed to fetch quota from all endpoints for account ${accountState.id}`,
     );
   }
 
@@ -110,43 +98,32 @@ export class QuotaService {
           resetTime,
           lastFetchedAt: new Date(),
         });
-
-        this.logger.debug(
-          `Quota updated: account=${accountId}, model=${modelName}, quota=${quota.toFixed(4)}`,
-        );
       }
     }
 
-    // Mirror gemini-3-pro-high to gemini-3-pro-preview if available
+    // Mirroring specific models
     const highQuota = accountCache.get('gemini-3-pro-high');
-    if (highQuota) {
-      accountCache.set('gemini-3-pro-preview', { ...highQuota });
-    }
+    if (highQuota) accountCache.set('gemini-3-pro-preview', { ...highQuota });
 
-    // Mirror gemini-3-flash to gemini-3-pro-flash-preview
     const flashQuota = accountCache.get('gemini-3-flash');
-    if (flashQuota) {
+    if (flashQuota)
       accountCache.set('gemini-3-pro-flash-preview', { ...flashQuota });
-    }
 
-    // Emit real-time update to dashboard
     this.emitQuotaUpdate();
   }
 
   private emitQuotaUpdate(): void {
     try {
-      const status = this.accountsService.getStatus();
-      const quotaAccounts = this.accountsService.getAccountsForQuotaStatus();
+      const status = accountsService.getStatus();
+      const quotaAccounts = accountsService.getAccountsForQuotaStatus();
       const quotaStatus = this.getQuotaStatus(quotaAccounts);
 
-      this.eventsService.emitDashboardUpdate({
+      eventsService.emitDashboardUpdate({
         status,
         quotaStatus,
       });
-
-      this.logger.debug('Emitted quota update via WebSocket');
     } catch (error) {
-      this.logger.error('Failed to emit quota update:', error);
+      console.error('[Quota] Failed to emit quota update:', error);
     }
   }
 
@@ -234,3 +211,5 @@ export class QuotaService {
     return { groups };
   }
 }
+
+export const quotaService = new QuotaService();

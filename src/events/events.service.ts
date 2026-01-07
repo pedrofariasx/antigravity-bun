@@ -1,16 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { Subject } from 'rxjs';
 
-@Injectable()
 export class EventsService {
-  private readonly logger = new Logger(EventsService.name);
-
-  // Subject to bridge between services and the WebSocket gateway
+  // Subject to bridge between services and the WebSocket (Elysia WS)
   private readonly eventsSubject = new Subject<{ event: string; data: any }>();
   public readonly events$ = this.eventsSubject.asObservable();
 
   emit(event: string, data: any) {
-    this.logger.debug(`Emitting event: ${event}`);
+    console.debug(`[Events] Emitting event: ${event}`);
     this.eventsSubject.next({ event, data });
   }
 
@@ -26,3 +22,5 @@ export class EventsService {
     this.emit('account.statusChange', data);
   }
 }
+
+export const eventsService = new EventsService();

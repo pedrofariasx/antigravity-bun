@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { ChatCompletionRequestDto, MessageDto, ToolDto } from '../dto';
 import {
@@ -49,7 +48,6 @@ export interface StreamAccumulator {
   };
 }
 
-@Injectable()
 export class TransformerService {
   pruneMessages(messages: any[], limit = 10): any[] {
     if (messages.length <= limit) return messages;
@@ -652,3 +650,5 @@ export class TransformerService {
     return { content, toolCalls, reasoningContent, thoughtSignature };
   }
 }
+
+export const transformerService = new TransformerService();

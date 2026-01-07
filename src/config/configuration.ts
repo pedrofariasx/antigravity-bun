@@ -33,7 +33,7 @@ function loadAccountsFromEnv(): AccountCredential[] {
   return accounts;
 }
 
-export default () => ({
+export const config = {
   port: parseInt(process.env.PORT ?? '3000', 10),
 
   auth: {
@@ -72,4 +72,4 @@ export default () => ({
       'https://www.googleapis.com/auth/experimentsandconfigs',
     ],
   },
-});
+};

@@ -1,4 +1,3 @@
-import { Injectable } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import {
   AnthropicMessagesRequestDto,
@@ -48,7 +47,6 @@ export interface AnthropicStreamAccumulator {
   };
 }
 
-@Injectable()
 export class AnthropicTransformerService {
   transformRequest(
     dto: AnthropicMessagesRequestDto,
@@ -604,3 +602,5 @@ export class AnthropicTransformerService {
     return events;
   }
 }
+
+export const anthropicTransformerService = new AnthropicTransformerService();

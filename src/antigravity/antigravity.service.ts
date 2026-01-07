@@ -1,14 +1,12 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { Readable } from 'stream';
-import { AccountsService } from '../accounts/accounts.service';
+import { config } from '../config/configuration';
+import { accountsService } from '../accounts/accounts.service';
 import { AccountState } from '../accounts/interfaces';
-import { TransformerService } from './services/transformer.service';
-import { AnthropicTransformerService } from './services/anthropic-transformer.service';
-import { QuotaService } from '../quota/quota.service';
+import { transformerService } from './services/transformer.service';
+import { anthropicTransformerService } from './services/anthropic-transformer.service';
+import { quotaService } from '../quota/quota.service';
 import { ChatCompletionRequestDto } from './dto';
 import { ChatCompletionResponse, ModelsResponse } from './dto';
 import { AnthropicMessagesRequestDto } from './dto/anthropic-messages-request.dto';
@@ -26,48 +24,33 @@ import {
 } from './constants';
 import { SSEStreamParser } from '../common/utils';
 import { QuotaStatusResponse } from '../quota/interfaces';
-import { ApiKeysService } from '../api-keys/api-keys.service';
-import { AntigravityClientService } from './services/antigravity-client.service';
-import { EventsService } from '../events/events.service';
+import { apiKeysService } from '../api-keys/api-keys.service';
+import { antigravityClientService } from './services/antigravity-client.service';
+import { eventsService } from '../events/events.service';
 
 type ApiType = 'openai' | 'anthropic';
 
-@Injectable()
 export class AntigravityService {
-  private readonly logger = new Logger(AntigravityService.name);
-  private currentBaseUrlIndex = 0;
   private readonly maxRetryAccounts: number;
 
-  constructor(
-    private readonly accountsService: AccountsService,
-    private readonly transformerService: TransformerService,
-    private readonly anthropicTransformerService: AnthropicTransformerService,
-    private readonly quotaService: QuotaService,
-    private readonly configService: ConfigService,
-    private readonly apiKeysService: ApiKeysService,
-    private readonly antigravityClient: AntigravityClientService,
-    private readonly eventsService: EventsService,
-  ) {
-    this.maxRetryAccounts =
-      this.configService.get<number>('accounts.maxRetryAccounts') || 3;
+  constructor() {
+    this.maxRetryAccounts = config.accounts.maxRetryAccounts || 3;
   }
 
   private checkAccountsExist(): void {
-    if (!this.accountsService.hasAccounts()) {
-      throw new HttpException(
+    if (!accountsService.hasAccounts()) {
+      throw new Error(
         'No accounts configured. Visit /oauth/authorize to add accounts.',
-        HttpStatus.SERVICE_UNAVAILABLE,
       );
     }
   }
 
-  private createRateLimitError(
-    apiType: ApiType,
-    retryAfter?: number,
-  ): HttpException {
+  private createRateLimitError(apiType: ApiType, retryAfter?: number): any {
+    const status = 429;
     if (apiType === 'anthropic') {
-      return new HttpException(
-        {
+      return {
+        status,
+        body: {
           type: 'error',
           error: {
             type: 'rate_limit_error',
@@ -76,12 +59,12 @@ export class AntigravityService {
               : 'All accounts are rate limited. Please try again later.',
           },
         },
-        HttpStatus.TOO_MANY_REQUESTS,
-      );
+      };
     }
 
-    return new HttpException(
-      {
+    return {
+      status,
+      body: {
         error: {
           message: retryAfter
             ? `All accounts are rate limited. Retry after ${retryAfter} seconds.`
@@ -91,12 +74,11 @@ export class AntigravityService {
           code: 'rate_limit_exceeded',
         },
       },
-      HttpStatus.TOO_MANY_REQUESTS,
-    );
+    };
   }
 
   private getRetryAfterSeconds(): number {
-    const earliestCooldown = this.accountsService.getEarliestCooldownEnd();
+    const earliestCooldown = accountsService.getEarliestCooldownEnd();
     return earliestCooldown
       ? Math.ceil((earliestCooldown - Date.now()) / 1000)
       : 60;
@@ -105,36 +87,37 @@ export class AntigravityService {
   private async withAccountRetry<T>(
     operation: (accountState: AccountState) => Promise<T>,
     apiType: ApiType,
-    res?: Response,
+    setHeaders?: (name: string, value: string) => void,
     forcedAccountId?: string,
     modelName?: string,
   ): Promise<T> {
     const maxAttempts = Math.min(
       this.maxRetryAccounts,
-      this.accountsService.getAccountCount(),
+      accountsService.getAccountCount(),
     );
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const accountState =
         forcedAccountId && attempt === 0
-          ? this.accountsService.getAccountById(forcedAccountId)
-          : this.accountsService.getNextAccount(modelName);
+          ? accountsService.getAccountById(forcedAccountId)
+          : accountsService.getNextAccount(modelName);
 
       if (!accountState) {
         const retryAfter = this.getRetryAfterSeconds();
-        if (res) {
-          res.setHeader('Retry-After', String(retryAfter));
+        if (setHeaders) {
+          setHeaders('Retry-After', String(retryAfter));
         }
-        throw this.createRateLimitError(apiType, retryAfter);
+        const error = this.createRateLimitError(apiType, retryAfter);
+        throw error;
       }
 
       try {
         return await operation(accountState);
-      } catch (error) {
+      } catch (error: any) {
         if (this.isRateLimitError(error) || this.isQuotaExceededError(error)) {
-          this.accountsService.markCooldown(accountState.id);
-          this.logger.warn(
-            `Rate limit or quota exceeded on account ${accountState.id} (${accountState.credential.email}), trying next account...`,
+          accountsService.markCooldown(accountState.id);
+          console.warn(
+            `[Antigravity] Rate limit or quota exceeded on account ${accountState.id} (${accountState.credential.email}), trying next account...`,
           );
           continue;
         }
@@ -145,20 +128,13 @@ export class AntigravityService {
     throw this.createRateLimitError(apiType);
   }
 
-  private setSSEHeaders(res: Response): void {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-  }
-
   private async createStreamRequest(
     data: unknown,
     accountState: AccountState,
   ): Promise<Readable> {
-    const authHeaders = await this.accountsService.getAuthHeaders(accountState);
+    const authHeaders = await accountsService.getAuthHeaders(accountState);
     const endpoint = ':streamGenerateContent?alt=sse';
-    const baseUrl = this.antigravityClient.getBaseUrl();
+    const baseUrl = antigravityClientService.getBaseUrl();
     const host = new URL(baseUrl).host;
 
     const response: AxiosResponse<Readable> = await axios.post(
@@ -180,7 +156,8 @@ export class AntigravityService {
 
   private async processStream(
     stream: Readable,
-    res: Response,
+    write: (data: string) => void,
+    end: () => void,
     handlers: {
       onData: (data: string) => void;
       onEnd: () => void;
@@ -192,42 +169,26 @@ export class AntigravityService {
 
     await new Promise<void>((resolve, reject) => {
       stream.on('data', (chunk: Buffer) => {
-        if (res.writableEnded || res.destroyed) {
-          return;
-        }
-
         const dataLines = parser.parseChunk(chunk);
         for (const data of dataLines) {
-          if (res.writableEnded || res.destroyed) {
-            return;
-          }
-
           try {
             onData(data);
           } catch {
-            this.logger.warn(`Failed to parse chunk: ${data}`);
+            console.warn(`[Antigravity] Failed to parse chunk: ${data}`);
           }
-        }
-
-        if (parser.isDone(chunk)) {
-          return;
         }
       });
 
       stream.on('end', () => {
-        if (!res.writableEnded && !res.destroyed) {
-          onEnd();
-          res.end();
-        }
+        onEnd();
+        end();
         resolve();
       });
 
       stream.on('error', (error: Error) => {
-        this.logger.error(`Stream error: ${error.message}`);
-        if (!res.writableEnded && !res.destroyed) {
-          onError(error);
-          res.end();
-        }
+        console.error(`[Antigravity] Stream error: ${error.message}`);
+        onError(error);
+        end();
         reject(error);
       });
     });
@@ -245,24 +206,22 @@ export class AntigravityService {
     try {
       const response = await this.withAccountRetry(
         async (accountState) => {
-          const projectId =
-            await this.accountsService.getProjectId(accountState);
+          const projectId = await accountsService.getProjectId(accountState);
 
-          // Apply Smart Context if enabled
           if (apiKeyData?.smart_context === 1) {
-            dto.messages = this.transformerService.pruneMessages(dto.messages);
-            this.logger.debug(
-              `Smart Context active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
+            dto.messages = transformerService.pruneMessages(dto.messages);
+            console.debug(
+              `[Antigravity] Smart Context active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
             );
           }
 
-          const antigravityRequest = this.transformerService.transformRequest(
+          const antigravityRequest = transformerService.transformRequest(
             dto,
             projectId,
           );
 
-          this.logger.debug(
-            `Chat completion: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
+          console.debug(
+            `[Antigravity] Chat completion: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
           );
 
           const response = await this.makeRequest<AntigravityResponse>(
@@ -271,9 +230,9 @@ export class AntigravityService {
             accountState,
           );
 
-          this.accountsService.markSuccess(accountState.id);
+          accountsService.markSuccess(accountState.id);
 
-          return this.transformerService.transformResponse(
+          return transformerService.transformResponse(
             response,
             dto.model,
             requestId,
@@ -289,13 +248,13 @@ export class AntigravityService {
       const tokens = response.usage?.total_tokens || 0;
 
       if (apiKeyData) {
-        this.apiKeysService.updateUsage(apiKeyData.id, tokens);
+        apiKeysService.updateUsage(apiKeyData.id, tokens);
       }
 
       const promptTokens = response.usage?.prompt_tokens || 0;
       const completionTokens = response.usage?.completion_tokens || 0;
 
-      this.apiKeysService.logRequest(
+      apiKeysService.logRequest(
         apiKeyData?.id || null,
         dto.model,
         promptTokens,
@@ -304,8 +263,7 @@ export class AntigravityService {
         'success',
       );
 
-      // Notify real-time analytics
-      this.eventsService.emitAnalyticsNewRequest({
+      eventsService.emitAnalyticsNewRequest({
         model: dto.model,
         tokens: promptTokens + completionTokens,
         latency,
@@ -314,9 +272,9 @@ export class AntigravityService {
       });
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       const latency = Date.now() - startTime;
-      this.apiKeysService.logRequest(
+      apiKeysService.logRequest(
         apiKeyData?.id || null,
         dto.model,
         0,
@@ -326,8 +284,7 @@ export class AntigravityService {
         error.message,
       );
 
-      // Notify real-time analytics for errors
-      this.eventsService.emitAnalyticsNewRequest({
+      eventsService.emitAnalyticsNewRequest({
         model: dto.model,
         tokens: 0,
         latency,
@@ -340,7 +297,9 @@ export class AntigravityService {
 
   async chatCompletionStream(
     dto: ChatCompletionRequestDto,
-    res: Response,
+    write: (data: string) => void,
+    end: () => void,
+    setHeaders: (name: string, value: string) => void,
     forcedAccountId?: string,
     apiKeyData?: any,
   ): Promise<void> {
@@ -350,41 +309,36 @@ export class AntigravityService {
 
     await this.withAccountRetry(
       async (accountState) => {
-        const projectId = await this.accountsService.getProjectId(accountState);
+        const projectId = await accountsService.getProjectId(accountState);
 
-        // Apply Smart Context if enabled
         if (apiKeyData?.smart_context === 1) {
-          dto.messages = this.transformerService.pruneMessages(dto.messages);
-          this.logger.debug(
-            `Smart Context (Stream) active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
-          );
+          dto.messages = transformerService.pruneMessages(dto.messages);
         }
 
-        const antigravityRequest = this.transformerService.transformRequest(
+        const antigravityRequest = transformerService.transformRequest(
           dto,
           projectId,
         );
 
-        this.setSSEHeaders(res);
-
-        this.logger.debug(
-          `Streaming chat completion: model=${dto.model}, account=${accountState.id} (${accountState.credential.email})`,
-        );
+        setHeaders('Content-Type', 'text/event-stream');
+        setHeaders('Cache-Control', 'no-cache');
+        setHeaders('Connection', 'keep-alive');
+        setHeaders('X-Accel-Buffering', 'no');
 
         const stream = await this.createStreamRequest(
           antigravityRequest,
           accountState,
         );
-        this.accountsService.markSuccess(accountState.id);
+        accountsService.markSuccess(accountState.id);
 
         const parser = new SSEStreamParser();
         let isFirst = true;
-        const accumulator = this.transformerService.createStreamAccumulator();
+        const accumulator = transformerService.createStreamAccumulator();
 
-        await this.processStream(stream, res, {
+        await this.processStream(stream, write, end, {
           onData: (data) => {
             const parsed = JSON.parse(data) as AntigravityStreamChunk;
-            const transformed = this.transformerService.transformStreamChunk(
+            const transformed = transformerService.transformStreamChunk(
               parsed,
               dto.model,
               requestId,
@@ -392,24 +346,24 @@ export class AntigravityService {
               accumulator,
             );
 
-            if (transformed && !res.writableEnded && !res.destroyed) {
-              res.write(`data: ${JSON.stringify(transformed)}\n\n`);
+            if (transformed) {
+              write(`data: ${JSON.stringify(transformed)}\n\n`);
               isFirst = false;
             }
           },
           onEnd: () => {
             if (!accumulator.isComplete) {
-              const finalChunk = this.transformerService.createFinalChunk(
+              const finalChunk = transformerService.createFinalChunk(
                 requestId,
                 dto.model,
                 accumulator,
               );
-              res.write(`data: ${JSON.stringify(finalChunk)}\n\n`);
+              write(`data: ${JSON.stringify(finalChunk)}\n\n`);
             }
-            res.write('data: [DONE]\n\n');
+            write('data: [DONE]\n\n');
           },
           onError: (error) => {
-            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
           },
           parser,
         });
@@ -420,10 +374,10 @@ export class AntigravityService {
         const totalTokens = promptTokens + completionTokens;
 
         if (apiKeyData) {
-          this.apiKeysService.updateUsage(apiKeyData.id, totalTokens);
+          apiKeysService.updateUsage(apiKeyData.id, totalTokens);
         }
 
-        this.apiKeysService.logRequest(
+        apiKeysService.logRequest(
           apiKeyData?.id || null,
           dto.model,
           promptTokens,
@@ -432,8 +386,7 @@ export class AntigravityService {
           'success',
         );
 
-        // Notify real-time analytics
-        this.eventsService.emitAnalyticsNewRequest({
+        eventsService.emitAnalyticsNewRequest({
           model: dto.model,
           tokens: totalTokens,
           latency,
@@ -442,12 +395,12 @@ export class AntigravityService {
         });
       },
       'openai',
-      res,
+      setHeaders,
       forcedAccountId,
       dto.model,
     ).catch(async (error) => {
       const latency = Date.now() - startTime;
-      this.apiKeysService.logRequest(
+      apiKeysService.logRequest(
         apiKeyData?.id || null,
         dto.model,
         0,
@@ -456,19 +409,7 @@ export class AntigravityService {
         'error',
         error.message,
       );
-
-      // Notify real-time analytics for errors
-      this.eventsService.emitAnalyticsNewRequest({
-        model: dto.model,
-        tokens: 0,
-        latency,
-        status: 'error',
-        timestamp: new Date().toISOString(),
-      });
-      if (!res.headersSent) {
-        throw error;
-      }
-      await this.handleStreamError(error, res);
+      throw error;
     });
   }
 
@@ -487,31 +428,28 @@ export class AntigravityService {
   }
 
   async getQuotaStatus(): Promise<QuotaStatusResponse> {
-    const readyAccounts = this.accountsService.getReadyAccounts();
+    const readyAccounts = accountsService.getReadyAccounts();
 
     await Promise.allSettled(
       readyAccounts.map((account) => this.refreshAccountQuota(account)),
     );
 
-    const accounts = this.accountsService.getAccountsForQuotaStatus();
-    return this.quotaService.getQuotaStatus(accounts);
+    const accounts = accountsService.getAccountsForQuotaStatus();
+    return quotaService.getQuotaStatus(accounts);
   }
 
   private async refreshAccountQuota(accountState: AccountState): Promise<void> {
     try {
-      const accessToken =
-        await this.accountsService.getAccessToken(accountState);
-      const projectId = await this.accountsService.getProjectId(accountState);
-      await this.quotaService.fetchQuotaFromUpstream(
+      const accessToken = await accountsService.getAccessToken(accountState);
+      const projectId = await accountsService.getProjectId(accountState);
+      await quotaService.fetchQuotaFromUpstream(
         accountState,
         accessToken,
         projectId,
       );
-    } catch (error) {
-      const errorMessage =
-        error instanceof Error ? error.message : 'Unknown error';
-      this.logger.warn(
-        `Failed to refresh quota for account ${accountState.id}: ${errorMessage}`,
+    } catch (error: any) {
+      console.warn(
+        `[Antigravity] Failed to refresh quota for account ${accountState.id}: ${error.message}`,
       );
     }
   }
@@ -528,23 +466,14 @@ export class AntigravityService {
     try {
       const response = await this.withAccountRetry(
         async (accountState) => {
-          const projectId =
-            await this.accountsService.getProjectId(accountState);
+          const projectId = await accountsService.getProjectId(accountState);
 
-          // Apply Smart Context if enabled
           if (apiKeyData?.smart_context === 1) {
-            dto.messages = this.transformerService.pruneMessages(dto.messages);
-            this.logger.debug(
-              `Smart Context (Anthropic) active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
-            );
+            dto.messages = transformerService.pruneMessages(dto.messages);
           }
 
           const antigravityRequest =
-            this.anthropicTransformerService.transformRequest(dto, projectId);
-
-          this.logger.debug(
-            `Anthropic messages: model=${dto.model}, account=${accountState.id} (${accountState.credential.email}), messages=${dto.messages.length}`,
-          );
+            anthropicTransformerService.transformRequest(dto, projectId);
 
           const response = await this.makeRequest<AntigravityResponse>(
             ':generateContent',
@@ -552,9 +481,9 @@ export class AntigravityService {
             accountState,
           );
 
-          this.accountsService.markSuccess(accountState.id);
+          accountsService.markSuccess(accountState.id);
 
-          return this.anthropicTransformerService.transformResponse(
+          return anthropicTransformerService.transformResponse(
             response,
             dto.model,
             messageId,
@@ -572,10 +501,10 @@ export class AntigravityService {
       const totalTokens = inputTokens + output_tokens;
 
       if (apiKeyData) {
-        this.apiKeysService.updateUsage(apiKeyData.id, totalTokens);
+        apiKeysService.updateUsage(apiKeyData.id, totalTokens);
       }
 
-      this.apiKeysService.logRequest(
+      apiKeysService.logRequest(
         apiKeyData?.id || null,
         dto.model,
         inputTokens,
@@ -584,8 +513,7 @@ export class AntigravityService {
         'success',
       );
 
-      // Notify real-time analytics
-      this.eventsService.emitAnalyticsNewRequest({
+      eventsService.emitAnalyticsNewRequest({
         model: dto.model,
         tokens: totalTokens,
         latency,
@@ -594,9 +522,9 @@ export class AntigravityService {
       });
 
       return response;
-    } catch (error) {
+    } catch (error: any) {
       const latency = Date.now() - startTime;
-      this.apiKeysService.logRequest(
+      apiKeysService.logRequest(
         apiKeyData?.id || null,
         dto.model,
         0,
@@ -605,22 +533,15 @@ export class AntigravityService {
         'error',
         error.message,
       );
-
-      // Notify real-time analytics for errors
-      this.eventsService.emitAnalyticsNewRequest({
-        model: dto.model,
-        tokens: 0,
-        latency,
-        status: 'error',
-        timestamp: new Date().toISOString(),
-      });
       throw error;
     }
   }
 
   async anthropicMessagesStream(
     dto: AnthropicMessagesRequestDto,
-    res: Response,
+    write: (data: string) => void,
+    end: () => void,
+    setHeaders: (name: string, value: string) => void,
     messageId: string,
     forcedAccountId?: string,
     apiKeyData?: any,
@@ -630,55 +551,45 @@ export class AntigravityService {
 
     await this.withAccountRetry(
       async (accountState) => {
-        const projectId = await this.accountsService.getProjectId(accountState);
+        const projectId = await accountsService.getProjectId(accountState);
 
-        // Apply Smart Context if enabled
         if (apiKeyData?.smart_context === 1) {
-          dto.messages = this.transformerService.pruneMessages(dto.messages);
-          this.logger.debug(
-            `Smart Context (Anthropic Stream) active for API Key ${apiKeyData.name}: pruned to ${dto.messages.length} messages`,
-          );
+          dto.messages = transformerService.pruneMessages(dto.messages);
         }
 
-        const antigravityRequest =
-          this.anthropicTransformerService.transformRequest(dto, projectId);
-
-        this.setSSEHeaders(res);
-
-        this.logger.debug(
-          `Streaming Anthropic messages: model=${dto.model}, account=${accountState.id} (${accountState.credential.email})`,
+        const antigravityRequest = anthropicTransformerService.transformRequest(
+          dto,
+          projectId,
         );
+
+        setHeaders('Content-Type', 'text/event-stream');
+        setHeaders('Cache-Control', 'no-cache');
+        setHeaders('Connection', 'keep-alive');
 
         const stream = await this.createStreamRequest(
           antigravityRequest,
           accountState,
         );
-        this.accountsService.markSuccess(accountState.id);
+        accountsService.markSuccess(accountState.id);
 
         const parser = new SSEStreamParser();
         let isFirst = true;
-        const accumulator =
-          this.anthropicTransformerService.createStreamAccumulator(
-            messageId,
-            dto.model,
-          );
+        const accumulator = anthropicTransformerService.createStreamAccumulator(
+          messageId,
+          dto.model,
+        );
 
-        await this.processStream(stream, res, {
+        await this.processStream(stream, write, end, {
           onData: (data) => {
             const parsed = JSON.parse(data) as AntigravityStreamChunk;
-            const events =
-              this.anthropicTransformerService.transformStreamChunk(
-                parsed,
-                accumulator,
-                isFirst,
-              );
+            const events = anthropicTransformerService.transformStreamChunk(
+              parsed,
+              accumulator,
+              isFirst,
+            );
 
             for (const event of events) {
-              if (!res.writableEnded && !res.destroyed) {
-                res.write(
-                  `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
-                );
-              }
+              write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
             }
 
             if (events.length > 0) {
@@ -687,11 +598,9 @@ export class AntigravityService {
           },
           onEnd: () => {
             const finalEvents =
-              this.anthropicTransformerService.createFinalEvents(accumulator);
+              anthropicTransformerService.createFinalEvents(accumulator);
             for (const event of finalEvents) {
-              res.write(
-                `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
-              );
+              write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
             }
           },
           onError: (error) => {
@@ -699,7 +608,7 @@ export class AntigravityService {
               type: 'error',
               error: { type: 'api_error', message: error.message },
             };
-            res.write(`event: error\ndata: ${JSON.stringify(errorEvent)}\n\n`);
+            write(`event: error\ndata: ${JSON.stringify(errorEvent)}\n\n`);
           },
           parser,
         });
@@ -710,10 +619,10 @@ export class AntigravityService {
         const totalTokens = inputTokens + outputTokens;
 
         if (apiKeyData) {
-          this.apiKeysService.updateUsage(apiKeyData.id, totalTokens);
+          apiKeysService.updateUsage(apiKeyData.id, totalTokens);
         }
 
-        this.apiKeysService.logRequest(
+        apiKeysService.logRequest(
           apiKeyData?.id || null,
           dto.model,
           inputTokens,
@@ -722,8 +631,7 @@ export class AntigravityService {
           'success',
         );
 
-        // Notify real-time analytics
-        this.eventsService.emitAnalyticsNewRequest({
+        eventsService.emitAnalyticsNewRequest({
           model: dto.model,
           tokens: totalTokens,
           latency,
@@ -732,65 +640,26 @@ export class AntigravityService {
         });
       },
       'anthropic',
-      res,
+      setHeaders,
       forcedAccountId,
       dto.model,
     ).catch(async (error) => {
-      if (!res.headersSent) {
-        throw error;
-      }
-      await this.handleAnthropicStreamError(error, res);
+      throw error;
     });
   }
 
   private isRateLimitError(error: unknown): boolean {
-    if (error instanceof HttpException) {
-      return error.getStatus() === 429;
-    }
     if (axios.isAxiosError(error)) {
       return error.response?.status === 429;
     }
-    return false;
+    return (error as any)?.status === 429;
   }
 
   private isQuotaExceededError(error: unknown): boolean {
-    if (error instanceof HttpException) {
-      return error.getStatus() === 403;
-    }
     if (axios.isAxiosError(error)) {
       return error.response?.status === 403;
     }
-    return false;
-  }
-
-  private async handleAnthropicStreamError(
-    error: unknown,
-    res: Response,
-  ): Promise<void> {
-    await this.handleStreamErrorInternal(error, res, 'anthropic');
-  }
-
-  private mapAnthropicErrorType(status: number): string {
-    switch (status) {
-      case 400:
-        return 'invalid_request_error';
-      case 401:
-        return 'authentication_error';
-      case 403:
-        return 'permission_error';
-      case 404:
-        return 'not_found_error';
-      case 429:
-        return 'rate_limit_error';
-      case 500:
-      case 502:
-      case 503:
-        return 'api_error';
-      case 529:
-        return 'overloaded_error';
-      default:
-        return 'api_error';
-    }
+    return (error as any)?.status === 403;
   }
 
   private async makeRequest<T>(
@@ -799,195 +668,32 @@ export class AntigravityService {
     accountState: AccountState,
   ): Promise<T> {
     try {
-      const headers = await this.accountsService.getAuthHeaders(accountState);
-      return await this.antigravityClient.makeRequest<T>(
+      const headers = await accountsService.getAuthHeaders(accountState);
+      return await antigravityClientService.makeRequest<T>(
         endpoint,
         data,
         headers,
       );
-    } catch (error) {
+    } catch (error: any) {
       if (axios.isAxiosError(error)) {
         if (error.response?.status === 401) {
           try {
-            await this.accountsService.refreshToken(accountState);
+            await accountsService.refreshToken(accountState);
             const newHeaders =
-              await this.accountsService.getAuthHeaders(accountState);
-            return await this.antigravityClient.makeRequest<T>(
+              await accountsService.getAuthHeaders(accountState);
+            return await antigravityClientService.makeRequest<T>(
               endpoint,
               data,
               newHeaders,
             );
           } catch {
-            throw new HttpException(
-              'Authentication failed',
-              HttpStatus.UNAUTHORIZED,
-            );
+            throw { status: 401, body: { message: 'Authentication failed' } };
           }
         }
-        throw this.createHttpException(error);
       }
       throw error;
     }
   }
-
-  private createHttpException(
-    error: AxiosError<AntigravityError>,
-  ): HttpException {
-    const status = error.response?.status ?? HttpStatus.INTERNAL_SERVER_ERROR;
-    const message = error.response?.data?.error?.message ?? error.message;
-    const errorCode = this.mapHttpStatusToErrorCode(status);
-
-    return new HttpException(
-      {
-        error: {
-          message,
-          type: this.mapErrorType(status),
-          param: null,
-          code: errorCode,
-        },
-      },
-      status,
-    );
-  }
-
-  private mapErrorType(status: number): string {
-    switch (status) {
-      case 400:
-        return 'invalid_request_error';
-      case 401:
-        return 'authentication_error';
-      case 403:
-        return 'permission_error';
-      case 404:
-        return 'invalid_request_error';
-      case 429:
-        return 'rate_limit_error';
-      case 500:
-      case 502:
-      case 503:
-      case 504:
-        return 'server_error';
-      default:
-        return 'server_error';
-    }
-  }
-
-  private mapHttpStatusToErrorCode(status: number): string | null {
-    switch (status) {
-      case 400:
-        return 'invalid_request_error';
-      case 401:
-        return 'invalid_api_key';
-      case 403:
-        return 'insufficient_quota';
-      case 404:
-        return 'model_not_found';
-      case 429:
-        return 'rate_limit_exceeded';
-      case 500:
-        return 'server_error';
-      case 503:
-        return 'engine_overloaded';
-      case 504:
-        return 'timeout';
-      default:
-        return null;
-    }
-  }
-
-  private async extractErrorMessage(
-    error: unknown,
-  ): Promise<{ status: number; message: string }> {
-    const axiosError = error as AxiosError;
-    const status = axiosError.response?.status ?? 500;
-    let message = (error as Error).message;
-
-    if (axiosError.response?.data) {
-      try {
-        const responseData = axiosError.response.data as
-          | AsyncIterable<Buffer>
-          | AntigravityError;
-
-        if (
-          responseData &&
-          typeof (responseData as { on?: unknown }).on === 'function'
-        ) {
-          const chunks: Buffer[] = [];
-          for await (const chunk of responseData as AsyncIterable<Buffer>) {
-            chunks.push(chunk);
-          }
-          const body = Buffer.concat(chunks).toString('utf-8');
-          this.logger.error(`Streaming error body: ${body}`);
-
-          try {
-            const parsed = JSON.parse(body) as AntigravityError;
-            message = parsed?.error?.message ?? message;
-          } catch {
-            if (body.length < 500) {
-              message = body || message;
-            }
-          }
-        } else if (typeof responseData === 'object') {
-          const data = responseData as AntigravityError;
-          message = data?.error?.message ?? message;
-        }
-      } catch (readError) {
-        this.logger.warn(
-          `Could not read error response: ${(readError as Error).message}`,
-        );
-      }
-    }
-
-    return { status, message };
-  }
-
-  private async handleStreamErrorInternal(
-    error: unknown,
-    res: Response,
-    apiType: ApiType,
-  ): Promise<void> {
-    const { status, message } = await this.extractErrorMessage(error);
-
-    this.logger.error(
-      `${apiType === 'anthropic' ? 'Anthropic s' : 'S'}treaming error (${status}): ${message}`,
-    );
-
-    let errorResponse: unknown;
-    let dataPrefix: string;
-
-    if (apiType === 'anthropic') {
-      errorResponse = {
-        type: 'error',
-        error: {
-          type: this.mapAnthropicErrorType(status),
-          message,
-        },
-      };
-      dataPrefix = 'event: error\ndata: ';
-    } else {
-      errorResponse = {
-        error: {
-          message,
-          type: this.mapErrorType(status),
-          param: null,
-          code: this.mapHttpStatusToErrorCode(status),
-        },
-      };
-      dataPrefix = 'data: ';
-    }
-
-    if (!res.headersSent) {
-      res.status(status).json(errorResponse);
-    } else if (!res.writableEnded) {
-      res.write(`${dataPrefix}${JSON.stringify(errorResponse)}\n\n`);
-      res.end();
-    }
-  }
-
-  private async handleStreamError(
-    error: unknown,
-    res: Response,
-  ): Promise<void> {
-    await this.handleStreamErrorInternal(error, res, 'openai');
-  }
 }
+
+export const antigravityService = new AntigravityService();

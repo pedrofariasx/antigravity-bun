@@ -1,6 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
-import { AuthService } from '../auth/auth.service';
+import { databaseService } from '../database/database.service';
+import { authService } from '../auth/auth.service';
 
 export interface ApiKey {
   id: number;
@@ -20,15 +19,7 @@ export interface ApiKey {
   cors_origin: string;
 }
 
-@Injectable()
 export class ApiKeysService {
-  private readonly logger = new Logger(ApiKeysService.name);
-
-  constructor(
-    private readonly databaseService: DatabaseService,
-    private readonly authService: AuthService,
-  ) {}
-
   createApiKey(
     name: string,
     dailyLimit = 0,
@@ -39,10 +30,10 @@ export class ApiKeysService {
     description = '',
     corsOrigin = '*',
   ): { key: string; id: number } {
-    const rawKey = this.authService.generateApiKey();
-    const hashedKey = this.authService.hashApiKey(rawKey);
+    const rawKey = authService.generateApiKey();
+    const hashedKey = authService.hashApiKey(rawKey);
 
-    const result = this.databaseService.createApiKey(
+    const result = databaseService.createApiKey(
       name,
       hashedKey, // Store the hashed key
       dailyLimit,
@@ -54,7 +45,7 @@ export class ApiKeysService {
       corsOrigin,
     );
 
-    this.logger.log(`Created new API key: ${name}`);
+    console.log(`[ApiKeys] Created new API key: ${name}`);
 
     return {
       key: rawKey,
@@ -63,12 +54,12 @@ export class ApiKeysService {
   }
 
   getAllApiKeys(): ApiKey[] {
-    return this.databaseService.getAllApiKeys() as ApiKey[];
+    return databaseService.getAllApiKeys() as ApiKey[];
   }
 
   getApiKeyByRawKey(rawKey: string): ApiKey | undefined {
-    const hash = this.authService.hashApiKey(rawKey);
-    return this.databaseService.getApiKeyByHash(hash) as ApiKey | undefined;
+    const hash = authService.hashApiKey(rawKey);
+    return databaseService.getApiKeyByHash(hash) as ApiKey | undefined;
   }
 
   validateApiKey(key: string): { valid: boolean; keyData?: ApiKey } {
@@ -86,34 +77,34 @@ export class ApiKeysService {
   }
 
   updateUsage(keyId: number, tokensUsed: number): void {
-    this.databaseService.updateApiKeyUsage(keyId, tokensUsed);
+    databaseService.updateApiKeyUsage(keyId, tokensUsed);
   }
 
   deactivateApiKey(keyId: number): boolean {
-    const result = this.databaseService.deactivateApiKey(keyId);
-    this.logger.log(`Deactivated API key ID: ${keyId}`);
+    const result = databaseService.deactivateApiKey(keyId);
+    console.log(`[ApiKeys] Deactivated API key ID: ${keyId}`);
     return result.changes > 0;
   }
 
   activateApiKey(keyId: number): boolean {
-    const result = this.databaseService.activateApiKey(keyId);
-    this.logger.log(`Activated API key ID: ${keyId}`);
+    const result = databaseService.activateApiKey(keyId);
+    console.log(`[ApiKeys] Activated API key ID: ${keyId}`);
     return result.changes > 0;
   }
 
   deleteApiKey(keyId: number): boolean {
-    const result = this.databaseService.deleteApiKey(keyId);
-    this.logger.log(`Deleted API key ID: ${keyId}`);
+    const result = databaseService.deleteApiKey(keyId);
+    console.log(`[ApiKeys] Deleted API key ID: ${keyId}`);
     return result.changes > 0;
   }
 
   toggleSmartContext(keyId: number, enabled: boolean): boolean {
-    const result = this.databaseService.updateApiKeySmartContext(
+    const result = databaseService.updateApiKeySmartContext(
       keyId,
       enabled ? 1 : 0,
     );
-    this.logger.log(
-      `Smart Context ${enabled ? 'enabled' : 'disabled'} for API key ID: ${keyId}`,
+    console.log(
+      `[ApiKeys] Smart Context ${enabled ? 'enabled' : 'disabled'} for API key ID: ${keyId}`,
     );
     return result.changes > 0;
   }
@@ -131,39 +122,52 @@ export class ApiKeysService {
       corsOrigin?: string;
     },
   ): boolean {
-    const result = this.databaseService.updateApiKey(keyId, data);
-    this.logger.log(`Updated API key ID: ${keyId}`);
+    const result = databaseService.updateApiKey(keyId, data);
+    console.log(`[ApiKeys] Updated API key ID: ${keyId}`);
     return result.changes > 0;
   }
 
   getStats() {
-    return this.databaseService.getStatsForToday();
+    return databaseService.getStatsForToday();
   }
 
   getAnalyticsData() {
-    const logs = this.databaseService.getRecentLogs(500);
+    const logs = databaseService.getRecentLogs(1000); // Increased limit for better resolution
 
-    // Group by hour for usage chart
-    const usageByHour = new Map<string, number>();
-    const latencyByModel = new Map<string, { total: number; count: number }>();
-
+    // Initialize hours (categories)
+    const hours: string[] = [];
     const now = new Date();
     for (let i = 0; i < 24; i++) {
       const d = new Date(now);
       d.setHours(now.getHours() - i);
       const hourStr = d.getHours().toString().padStart(2, '0') + ':00';
-      usageByHour.set(hourStr, 0);
+      hours.push(hourStr);
     }
+    hours.reverse(); // Chronological order
+
+    // Initialize model series
+    const usageByModel = new Map<string, number[]>();
+    const latencyByModel = new Map<string, { total: number; count: number }>();
 
     (logs as any[]).forEach((log) => {
+      // 1. Process Usage
       const date = new Date(log.created_at);
       const hourStr = date.getHours().toString().padStart(2, '0') + ':00';
       const tokens = (log.tokens_input || 0) + (log.tokens_output || 0);
+      const model = log.model || 'unknown';
 
-      if (usageByHour.has(hourStr)) {
-        usageByHour.set(hourStr, (usageByHour.get(hourStr) || 0) + tokens);
+      // Find time slot index
+      const hourIndex = hours.indexOf(hourStr);
+
+      if (hourIndex !== -1) {
+        if (!usageByModel.has(model)) {
+          usageByModel.set(model, Array(24).fill(0));
+        }
+        const series = usageByModel.get(model)!;
+        series[hourIndex] += tokens;
       }
 
+      // 2. Process Latency
       if (log.latency_ms && log.model) {
         const stats = latencyByModel.get(log.model) || { total: 0, count: 0 };
         stats.total += log.latency_ms;
@@ -172,8 +176,16 @@ export class ApiKeysService {
       }
     });
 
-    const categories = Array.from(usageByHour.keys()).reverse();
-    const data = Array.from(usageByHour.values()).reverse();
+    // Format usage series for ApexCharts
+    const series = Array.from(usageByModel.entries()).map(([name, data]) => ({
+      name,
+      data,
+    }));
+
+    // If no data, return at least one empty series
+    if (series.length === 0) {
+      series.push({ name: 'No Data', data: Array(24).fill(0) });
+    }
 
     const latencyLabels = Array.from(latencyByModel.keys());
     const latencyValues = latencyLabels.map((m) => {
@@ -182,13 +194,13 @@ export class ApiKeysService {
     });
 
     return {
-      usage: { categories, data },
+      usage: { categories: hours, series },
       latency: { labels: latencyLabels, data: latencyValues },
     };
   }
 
   getRecentLogs(limit = 100) {
-    return this.databaseService.getRecentLogs(limit);
+    return databaseService.getRecentLogs(limit);
   }
 
   logRequest(
@@ -200,7 +212,7 @@ export class ApiKeysService {
     status: string,
     errorMessage?: string,
   ) {
-    this.databaseService.logRequest(
+    databaseService.logRequest(
       apiKeyId,
       model,
       tokensInput,
@@ -211,3 +223,5 @@ export class ApiKeysService {
     );
   }
 }
+
+export const apiKeysService = new ApiKeysService();

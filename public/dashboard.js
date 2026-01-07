@@ -171,6 +171,22 @@ function setTheme(theme) {
     document.getElementById('icon-light').style.display = 'none';
   }
 
+  // Update charts theme
+  if (usageChart) {
+    usageChart.updateOptions({ theme: { mode: theme } });
+  }
+  if (latencyChart) {
+    latencyChart.updateOptions({ theme: { mode: theme } });
+  }
+
+  // Update charts theme
+  if (usageChart) {
+    usageChart.updateOptions({ theme: { mode: theme } });
+  }
+  if (latencyChart) {
+    latencyChart.updateOptions({ theme: { mode: theme } });
+  }
+
   // Notify Swagger iframe
   const iframe = document.querySelector('.spa-frame');
   if (iframe && iframe.contentWindow) {
@@ -760,18 +776,18 @@ function initCharts(analyticsData) {
     Array(24)
       .fill(0)
       .map((_, i) => `${i.toString().padStart(2, '0')}:00`);
-  const usageSeries = analyticsData?.usage?.data || Array(24).fill(0);
+
+  // Support multiple series (per model)
+  const usageSeries = analyticsData?.usage?.series || [
+    { name: 'No Data', data: Array(24).fill(0) },
+  ];
 
   const usageOptions = {
-    series: [
-      {
-        name: 'Tokens',
-        data: usageSeries,
-      },
-    ],
+    series: usageSeries,
     chart: {
       height: 350,
       type: 'area',
+      stacked: true, // Enable stacking for breakdown
       toolbar: { show: false },
       background: 'transparent',
       animations: {
@@ -788,8 +804,8 @@ function initCharts(analyticsData) {
         },
       },
     },
-    theme: { mode: 'dark' },
-    colors: ['#6366f1'],
+    theme: { mode: getStoredTheme() },
+    // colors: ['#6366f1'], // Let ApexCharts pick colors or define a palette
     fill: {
       type: 'gradient',
       gradient: {
@@ -840,7 +856,7 @@ function initCharts(analyticsData) {
       background: 'transparent',
     },
     labels: latencyLabels,
-    theme: { mode: 'dark' },
+    theme: { mode: getStoredTheme() },
     colors: ['#6366f1', '#fb923c', '#34d399', '#f43f5e', '#8b5cf6', '#06b6d4'],
     legend: { position: 'bottom' },
     dataLabels: { enabled: false },
@@ -871,7 +887,7 @@ function initCharts(analyticsData) {
     usageChart.updateOptions({
       xaxis: { categories: usageCategories },
     });
-    usageChart.updateSeries([{ data: usageSeries }]);
+    usageChart.updateSeries(usageSeries);
   }
 
   if (!latencyChart) {
@@ -1393,7 +1409,12 @@ function initRealtime() {
     return;
   }
 
-  socket = io();
+  // Connect to Socket.IO on the dedicated port (server port + 1)
+  const wsPort = parseInt(window.location.port || '80', 10) + 1;
+  const wsUrl = `${window.location.protocol}//${window.location.hostname}:${wsPort}`;
+
+  console.log(`Connecting to Socket.IO at ${wsUrl}`);
+  socket = io(wsUrl);
 
   socket.on('connect', () => {
     console.log('Connected to real-time events');
